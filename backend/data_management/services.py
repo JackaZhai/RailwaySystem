@@ -73,7 +73,11 @@ class DataIngestionService:
         normalized["timestamp"] = pd.to_datetime(normalized["timestamp"], utc=True, errors="coerce")
         normalized["station"] = normalized["station"].astype(str).str.strip()
         normalized["line"] = normalized["line"].astype(str).str.strip()
-        normalized["direction"] = normalized.get("direction", "").fillna("").astype(str).str.upper()
+        normalized["direction"] = (
+            normalized["direction"].fillna("").astype(str).str.upper()
+            if "direction" in normalized
+            else ""
+        )
         normalized["passengers_in"] = pd.to_numeric(normalized["passengers_in"], errors="coerce").fillna(0).astype(int)
         normalized["passengers_out"] = pd.to_numeric(normalized["passengers_out"], errors="coerce").fillna(0).astype(int)
         return normalized

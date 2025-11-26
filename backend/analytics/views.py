@@ -1,6 +1,7 @@
 """Analytics API views."""
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 
 import pandas as pd
@@ -24,7 +25,7 @@ class PassengerFlowStatsView(views.APIView):
         end = parse_datetime(request.query_params.get("end")) if request.query_params.get("end") else None
         queryset = slice_by_timerange(queryset, start, end)
         summaries = passenger_flow_by_station(queryset)
-        data = [summary.__dict__ for summary in summaries]
+        data = [asdict(summary) for summary in summaries]
         return Response(data)
 
 
