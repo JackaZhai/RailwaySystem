@@ -35,7 +35,8 @@ def forecast_passenger_flow(
     forecast_res = model.get_forecast(steps=steps)
     freq = historical.index.freq or pd.infer_freq(historical.index) or "H"
     forecast_index = pd.date_range(start=historical.index[-1], periods=steps + 1, freq=freq)[1:]
-    conf_int = forecast_res.conf_int(alpha=0.05)
+    conf_int_raw = forecast_res.conf_int(alpha=0.05)
+    conf_int = pd.DataFrame(conf_int_raw, columns=["lower", "upper"]) if not isinstance(conf_int_raw, pd.DataFrame) else conf_int_raw
     return ForecastResult(
         timestamps=[pd.Timestamp(ts) for ts in forecast_index],
         forecast=list(forecast_res.predicted_mean),

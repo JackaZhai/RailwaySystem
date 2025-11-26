@@ -58,7 +58,7 @@ WSGI_APPLICATION = "railway_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": os.environ.get("DJANGO_DB_ENGINE", "django.db.backends.sqlite3"),
-        "NAME": os.environ.get("DJANGO_DB_NAME", BASE_DIR / "db" / "railway.sqlite3"),
+        "NAME": os.environ.get("DJANGO_DB_NAME", BASE_DIR.parent / "db" / "railway.sqlite3"),
         "USER": os.environ.get("DJANGO_DB_USER", ""),
         "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
         "HOST": os.environ.get("DJANGO_DB_HOST", ""),
@@ -83,6 +83,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
-    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ],
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
 }
