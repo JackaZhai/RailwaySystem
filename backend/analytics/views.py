@@ -63,7 +63,12 @@ class ForecastView(views.APIView):
         station = request.query_params.get("station")
         line = request.query_params.get("line")
         freq = request.query_params.get("freq", "H")
-        steps = int(request.query_params.get("steps", 6))
+        try:
+            steps = int(request.query_params.get("steps", 6))
+            if steps <= 0 or steps > 100:
+                return Response({"detail": "steps must be between 1 and 100"}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({"detail": "steps must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not station or not line:
             return Response({"detail": "station and line parameters are required"}, status=status.HTTP_400_BAD_REQUEST)
