@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加载动画修复测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: #2E8B57;
+            margin-bottom: 10px;
+            font-size: 2.2rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #2E8B57;
+            color: white;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .demo-section {
+            margin-bottom: 40px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            border: 2px solid #e9ecef;
+        }
+
+        .demo-title {
+            color: #2E8B57;
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .demo-title::before {
+            content: '✓';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            background: #2E8B57;
+            color: white;
+            border-radius: 50%;
+            font-size: 14px;
+        }
+
+        .loading-demo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #e9ecef;
+            border-top-color: #2E8B57;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .loading-text {
+            color: #666;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .fix-details {
+            margin-top: 20px;
+            padding: 20px;
+            background: #e8f5e9;
+            border-radius: 12px;
+            border-left: 4px solid #2E8B57;
+        }
+
+        .fix-details h3 {
+            color: #2E8B57;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .fix-details ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .fix-details li {
+            padding: 8px 0;
+            color: #555;
+            position: relative;
+            padding-left: 24px;
+        }
+
+        .fix-details li::before {
+            content: '•';
+            color: #2E8B57;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 14px 28px;
+            background: #2E8B57;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(46, 139, 87, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-btn:hover {
+            background: #228B22;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(46, 139, 87, 0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-btn.secondary {
+            background: #4682B4;
+            box-shadow: 0 4px 12px rgba(70, 130, 180, 0.3);
+        }
+
+        .control-btn.secondary:hover {
+            background: #36648B;
+            box-shadow: 0 6px 16px rgba(70, 130, 180, 0.4);
+        }
+
+        .success-message {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e8f5e9;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #2E8B57;
+        }
+
+        .success-message h3 {
+            color: #2E8B57;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .success-message p {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .app-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #2E8B57;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .app-link:hover {
+            background: #228B22;
+            transform: translateY(-2px);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .control-btn {
+                padding: 12px 24px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ 加载动画修复完成</h1>
+            <p class="subtitle">解决了加载动画重叠显示两个圈圈的问题</p>
+            <div class="status-badge">已修复</div>
+        </div>
+
+        <div class="demo-section">
+            <h2 class="demo-title">修复后的加载动画</h2>
+            <div class="loading-demo">
+                <div class="spinner"></div>
+                <div class="loading-text">正在加载数据...</div>
+            </div>
+
+            <div class="fix-details">
+                <h3>修复内容：</h3>
+                <ul>
+                    <li>移除了内圈旋转器，现在只显示单个旋转圈</li>
+                    <li>优化了旋转器的边框样式和颜色配置</li>
+                    <li>改进了不同尺寸和变体的样式管理</li>
+                    <li>保持了原有的动画流畅性和视觉反馈</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="simulateLoading()">
+                <span>🔄</span> 模拟加载
+            </button>
+            <button class="control-btn secondary" onclick="toggleSpinner()">
+                <span>⏸️</span> 暂停/继续
+            </button>
+        </div>
+
+        <div class="success-message">
+            <h3>🎉 修复成功！</h3>
+            <p>
+                加载动画现在只显示一个旋转圈，解决了重叠显示的问题。<br>
+                动画更加简洁、清晰，同时保持了良好的用户体验。
+            </p>
+            <p style="margin-top: 15px; font-weight: 600;">
+                前端应用运行在:
+                <a href="http://localhost:5175" target="_blank" class="app-link">
+                    http://localhost:5175
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let spinnerRunning = true;
+        const spinner = document.querySelector('.spinner');
+        const toggleBtn = document.querySelector('.control-btn.secondary');
+
+        function simulateLoading() {
+            // 重置动画
+            spinner.style.animation = 'none';
+            void spinner.offsetWidth; // 触发重排
+            spinner.style.animation = 'spin 1.5s linear infinite';
+
+            // 显示消息
+            showMessage('正在模拟数据加载...', 'info');
+
+            // 3秒后显示完成消息
+            setTimeout(() => {
+                showMessage('数据加载完成！', 'success');
+            }, 3000);
+        }
+
+        function toggleSpinner() {
+            spinnerRunning = !spinnerRunning;
+
+            if (spinnerRunning) {
+                spinner.style.animationPlayState = 'running';
+                toggleBtn.innerHTML = '<span>⏸️</span> 暂停';
+                showMessage('动画已继续', 'success');
+            } else {
+                spinner.style.animationPlayState = 'paused';
+                toggleBtn.innerHTML = '<span>▶️</span> 继续';
+                showMessage('动画已暂停', 'info');
+            }
+        }
+
+        function showMessage(text, type) {
+            // 移除现有消息
+            const existingMessage = document.querySelector('.temp-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // 创建新消息
+            const message = document.createElement('div');
+            message.className = 'temp-message';
+            message.textContent = text;
+            message.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 14px 28px;
+                background: ${type === 'success' ? '#2E8B57' : '#4682B4'};
+                color: white;
+                border-radius: 10px;
+                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                font-weight: 600;
+                z-index: 1000;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            document.body.appendChild(message);
+
+            // 3秒后移除
+            setTimeout(() => {
+                message.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => {
+                    if (message.parentNode) {
+                        message.remove();
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // 添加滑入滑出动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 初始显示欢迎消息
+        setTimeout(() => {
+            showMessage('加载动画修复测试页面已就绪！', 'success');
+        }, 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动画效果测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2E8B57;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .animation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .animation-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .animation-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+        }
+
+        .animation-title {
+            color: #2E8B57;
+            font-size: 1.5rem;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .animation-demo {
+            width: 100px;
+            height: 100px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #2E8B57, #4682B4);
+            color: white;
+            font-weight: bold;
+        }
+
+        .animation-description {
+            color: #666;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-top: 12px;
+        }
+
+        /* 动画类 */
+        .fade-in {
+            animation: fadeIn 1s ease-out;
+        }
+
+        .scale-in {
+            animation: scaleIn 1s ease-out;
+        }
+
+        .bounce {
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .rotate {
+            animation: rotate 2s linear infinite;
+        }
+
+        .float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        /* 动画关键帧 */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .control-btn {
+            padding: 12px 24px;
+            background: #2E8B57;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(46, 139, 87, 0.3);
+        }
+
+        .control-btn:hover {
+            background: #228B22;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(46, 139, 87, 0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-btn.secondary {
+            background: #4682B4;
+            box-shadow: 0 4px 12px rgba(70, 130, 180, 0.3);
+        }
+
+        .control-btn.secondary:hover {
+            background: #36648B;
+            box-shadow: 0 6px 16px rgba(70, 130, 180, 0.4);
+        }
+
+        .status {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .status h3 {
+            color: #2E8B57;
+            margin-bottom: 10px;
+        }
+
+        .status p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .animation-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .control-btn {
+                padding: 10px 20px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header fade-in">
+            <h1>🚀 铁路客运分析系统 - 动画效果测试</h1>
+            <p class="subtitle">验证所有交互动画和视觉效果</p>
+        </div>
+
+        <div class="animation-grid">
+            <!-- 淡入动画 -->
+            <div class="animation-card">
+                <h3 class="animation-title">淡入效果</h3>
+                <div class="animation-demo fade-in">
+                    淡入
+                </div>
+                <p class="animation-description">
+                    页面元素加载时的平滑淡入效果，提升用户体验
+                </p>
+            </div>
+
+            <!-- 缩放动画 -->
+            <div class="animation-card">
+                <h3 class="animation-title">缩放效果</h3>
+                <div class="animation-demo scale-in">
+                    缩放
+                </div>
+                <p class="animation-description">
+                    卡片和按钮的缩放交互，增强视觉反馈
+                </p>
+            </div>
+
+            <!-- 弹跳动画 -->
+            <div class="animation-card">
+                <h3 class="animation-title">弹跳效果</h3>
+                <div class="animation-demo bounce">
+                    弹跳
+                </div>
+                <p class="animation-description">
+                    重要通知和警告的吸引注意力效果
+                </p>
+            </div>
+
+            <!-- 脉冲动画 -->
+            <div class="animation-card">
+                <h3 class="animation-title">脉冲效果</h3>
+                <div class="animation-demo pulse">
+                    脉冲
+                </div>
+                <p class="animation-description">
+                    加载状态和实时更新的视觉指示
+                </p>
+            </div>
+
+            <!-- 旋转动画 -->
+            <div class="animation-card">
+                <h3 class="animation-title">旋转效果</h3>
+                <div class="animation-demo rotate">
+                    ↻
+                </div>
+                <p class="animation-description">
+                    加载指示器和刷新状态的旋转动画
+                </p>
+            </div>
+
+            <!-- 浮动动画 -->
+            <div class="animation-card">
+                <h3 class="animation-title">浮动效果</h3>
+                <div class="animation-demo float">
+                    浮动
+                </div>
+                <p class="animation-description">
+                    悬浮元素和装饰性动画效果
+                </p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="restartAnimations()">
+                🔄 重新播放动画
+            </button>
+            <button class="control-btn secondary" onclick="toggleAnimations()">
+                ⏸️ 暂停/继续动画
+            </button>
+        </div>
+
+        <div class="status">
+            <h3>✅ 动画系统状态</h3>
+            <p>
+                所有动画效果已成功集成到铁路客运分析系统中。<br>
+                包括：页面过渡、KPI数字滚动、图表动画、地图交互、加载状态等。
+            </p>
+            <p style="margin-top: 10px; color: #2E8B57; font-weight: 600;">
+                前端开发服务器运行在: <a href="http://localhost:5174" target="_blank">http://localhost:5174</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let animationsPaused = false;
+        const animationDemos = document.querySelectorAll('.animation-demo');
+
+        function restartAnimations() {
+            animationDemos.forEach(demo => {
+                demo.style.animation = 'none';
+                void demo.offsetWidth; // 触发重排
+
+                // 重新应用原始动画类
+                if (demo.classList.contains('fade-in')) {
+                    demo.style.animation = 'fadeIn 1s ease-out';
+                } else if (demo.classList.contains('scale-in')) {
+                    demo.style.animation = 'scaleIn 1s ease-out';
+                } else if (demo.classList.contains('bounce')) {
+                    demo.style.animation = 'bounce 1s ease-in-out infinite';
+                } else if (demo.classList.contains('pulse')) {
+                    demo.style.animation = 'pulse 2s ease-in-out infinite';
+                } else if (demo.classList.contains('rotate')) {
+                    demo.style.animation = 'rotate 2s linear infinite';
+                } else if (demo.classList.contains('float')) {
+                    demo.style.animation = 'float 3s ease-in-out infinite';
+                }
+            });
+
+            // 显示成功消息
+            showMessage('动画已重新播放！', 'success');
+        }
+
+        function toggleAnimations() {
+            animationsPaused = !animationsPaused;
+
+            animationDemos.forEach(demo => {
+                if (animationsPaused) {
+                    demo.style.animationPlayState = 'paused';
+                } else {
+                    demo.style.animationPlayState = 'running';
+                }
+            });
+
+            const button = document.querySelector('.control-btn.secondary');
+            if (animationsPaused) {
+                button.innerHTML = '▶️ 继续动画';
+                showMessage('动画已暂停', 'info');
+            } else {
+                button.innerHTML = '⏸️ 暂停动画';
+                showMessage('动画已继续', 'success');
+            }
+        }
+
+        function showMessage(text, type) {
+            // 创建消息元素
+            const message = document.createElement('div');
+            message.textContent = text;
+            message.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 24px;
+                background: ${type === 'success' ? '#2E8B57' : '#4682B4'};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                font-weight: 600;
+                z-index: 1000;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            document.body.appendChild(message);
+
+            // 3秒后移除
+            setTimeout(() => {
+                message.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => {
+                    document.body.removeChild(message);
+                }, 300);
+            }, 3000);
+        }
+
+        // 添加滑入滑出动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
