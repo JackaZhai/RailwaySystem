@@ -7,6 +7,7 @@ const Analytics = () => import('@/views/Analytics.vue')
 const Optimization = () => import('@/views/Optimization.vue')
 const Stations = () => import('@/views/Stations.vue')
 const DataManagement = () => import('@/views/DataManagement.vue')
+const DataManagementSimple = () => import('@/views/DataManagementSimple.vue')
 
 // 路由配置
 const routes: RouteRecordRaw[] = [
@@ -65,6 +66,17 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '数据管理',
           description: '数据导入、清洗和管理',
+          requiresAuth: true,
+          icon: 'data'
+        }
+      },
+      {
+        path: 'data-simple',
+        name: 'DataManagementSimple',
+        component: DataManagementSimple,
+        meta: {
+          title: '数据管理测试',
+          description: '数据管理页面测试',
           requiresAuth: true,
           icon: 'data'
         }

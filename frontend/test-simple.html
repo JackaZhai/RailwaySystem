@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>简单Vue测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vue 3 运行时测试</h1>
+
+    <div id="app1" class="test-container">
+        <h2>测试1: 基本Vue渲染</h2>
+        <p>消息: {{ message }}</p>
+        <button @click="count++">点击计数: {{ count }}</button>
+    </div>
+
+    <div id="app2" class="test-container">
+        <h2>测试2: 组件加载</h2>
+        <div v-if="loaded">✅ Vue组件已加载</div>
+        <div v-else class="error">❌ Vue组件未加载</div>
+    </div>
+
+    <script>
+        // 测试1: 基本Vue应用
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    message: 'Hello Vue 3!',
+                    count: 0
+                }
+            }
+        }).mount('#app1');
+
+        // 测试2: 检查Vue是否工作
+        createApp({
+            data() {
+                return {
+                    loaded: true
+                }
+            },
+            mounted() {
+                console.log('Vue组件已挂载');
+            }
+        }).mount('#app2');
+
+        console.log('测试脚本已执行');
+    </script>
+</body>
+</html>

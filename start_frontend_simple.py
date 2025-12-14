@@ -54,30 +54,46 @@ def check_nodejs():
 
     # 检查node命令
     try:
-        result = subprocess.run(['node', '--version'],
-                              capture_output=True, text=True, shell=True)
+        result = subprocess.run(
+            ['node', '--version'],
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=10
+        )
         if result.returncode == 0:
             print(f"[SUCCESS] Node.js版本: {result.stdout.strip()}")
         else:
             print("[ERROR] Node.js未安装或未在PATH中")
             print("请从 https://nodejs.org/ 下载安装Node.js")
             return False
-    except:
-        print("[ERROR] 无法执行node命令")
+    except subprocess.TimeoutExpired:
+        print("[ERROR] 执行node --version超时，请检查Node安装或重新打开终端后再试")
+        return False
+    except Exception as exc:
+        print(f"[ERROR] 无法执行node命令: {exc}")
         return False
 
     # 检查npm命令
     try:
-        result = subprocess.run(['npm', '--version'],
-                              capture_output=True, text=True, shell=True)
+        result = subprocess.run(
+            ['npm', '--version'],
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=10
+        )
         if result.returncode == 0:
             print(f"[SUCCESS] npm版本: {result.stdout.strip()}")
             return True
         else:
             print("[ERROR] npm未安装或未在PATH中")
             return False
-    except:
-        print("[ERROR] 无法执行npm命令")
+    except subprocess.TimeoutExpired:
+        print("[ERROR] 执行npm --version超时，请检查npm安装或重新打开终端后再试")
+        return False
+    except Exception as exc:
+        print(f"[ERROR] 无法执行npm命令: {exc}")
         return False
 
 def install_dependencies():
@@ -123,7 +139,7 @@ def start_dev_server():
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            shell=True,
+            shell=False,
             bufsize=1,
             universal_newlines=True,
             encoding='utf-8',
@@ -137,6 +153,15 @@ def start_dev_server():
         # 检查进程是否仍在运行
         if process.poll() is not None:
             print("[ERROR] 服务器启动失败")
+            # 输出启动日志便于定位
+            try:
+                remaining = process.stdout.read() if process.stdout else ""
+                if remaining:
+                    print("---- 启动日志 ----")
+                    print(remaining.rstrip())
+                    print("---- 日志结束 ----")
+            except Exception as exc:
+                print(f"[WARN] 读取启动日志失败: {exc}")
             return False
 
         print("[SUCCESS] 开发服务器已启动!")

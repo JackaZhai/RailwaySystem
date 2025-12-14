@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>路由测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .link {
+            display: block;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+        }
+        .link:hover {
+            background: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <h1>路由测试页面</h1>
+    <p>点击以下链接测试路由：</p>
+    <a class="link" href="http://localhost:5173/">首页 (/)</a>
+    <a class="link" href="http://localhost:5173/analytics">客流分析 (/analytics)</a>
+    <a class="link" href="http://localhost:5173/optimization">线路优化 (/optimization)</a>
+    <a class="link" href="http://localhost:5173/stations">站点评估 (/stations)</a>
+    <a class="link" href="http://localhost:5173/data">数据管理 (/data)</a>
+
+    <h2>直接访问测试：</h2>
+    <p>如果点击链接无效，请尝试在浏览器地址栏直接输入：</p>
+    <ul>
+        <li><code>http://localhost:5173/data</code></li>
+        <li><code>http://localhost:5174/data</code> (如果5173端口被占用)</li>
+    </ul>
+</body>
+</html>

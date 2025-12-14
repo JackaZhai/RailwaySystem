@@ -148,12 +148,16 @@ export interface DataUploadResponse {
   message: string
   recordsProcessed: number
   recordsFailed: number
+  recordCount?: number
+  duplicatesRemoved?: number
+  invalidRemoved?: number
   errors?: string[]
   fileInfo?: {
     filename: string
     size: number
     type: string
   }
+  file?: File
 }
 
 export interface DataQueryParams {
@@ -199,6 +203,41 @@ export interface DataCleanupResult {
   recordsUpdated: number
   duplicatesRemoved: number
   invalidRecordsRemoved: number
+  recordsProcessed?: number
+  missingFilled?: number
+  formatFixed?: number
+  inconsistenciesFixed?: number
+}
+
+export interface DataStats {
+  totalRecords: number
+  stations: number
+  trains?: number
+  lines?: number
+  dateRange: string | { minDate: string; maxDate: string }
+  lastUpdated?: string
+  recentUploads?: Array<{
+    filename: string
+    uploadedAt: string
+    records: number
+  }>
+}
+
+export interface ValidationIssue {
+  row: number
+  field: string
+  issue: string
+  suggestion: string
+}
+
+export interface DataValidationDetailedResult {
+  totalRecords: number
+  validRecords: number
+  duplicateRecords: number
+  invalidRecords: number
+  missingFields: number
+  formatErrors: number
+  issues: ValidationIssue[]
 }
 
 // API接口定义

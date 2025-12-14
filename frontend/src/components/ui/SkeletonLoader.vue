@@ -7,7 +7,7 @@
         <div class="skeleton-title"></div>
       </div>
       <div class="skeleton-content">
-        <div class="skeleton-line" v-for="i in lines" :key="i" :style="lineStyle(i)"></div>
+        <div v-for="i in lines" :key="i" class="skeleton-line" :style="lineStyle(i)"></div>
       </div>
       <div class="skeleton-footer">
         <div class="skeleton-button"></div>
@@ -17,7 +17,7 @@
 
     <!-- 列表类型 -->
     <div v-else-if="type === 'list'" class="skeleton-list">
-      <div class="skeleton-list-item" v-for="i in items" :key="i">
+      <div v-for="i in items" :key="i" class="skeleton-list-item">
         <div class="skeleton-list-avatar"></div>
         <div class="skeleton-list-content">
           <div class="skeleton-line" style="width: 70%"></div>
@@ -29,11 +29,11 @@
     <!-- 表格类型 -->
     <div v-else-if="type === 'table'" class="skeleton-table">
       <div class="skeleton-table-header">
-        <div class="skeleton-line" v-for="i in columns" :key="i" :style="headerCellStyle(i)"></div>
+        <div v-for="i in columns" :key="i" class="skeleton-line" :style="headerCellStyle(i)"></div>
       </div>
       <div class="skeleton-table-body">
-        <div class="skeleton-table-row" v-for="row in rows" :key="row">
-          <div class="skeleton-line" v-for="col in columns" :key="col" :style="cellStyle(col)"></div>
+        <div v-for="row in rows" :key="row" class="skeleton-table-row">
+          <div v-for="col in columns" :key="col" class="skeleton-line" :style="cellStyle(col)"></div>
         </div>
       </div>
     </div>
@@ -45,7 +45,7 @@
 
     <!-- 文本类型（默认） -->
     <div v-else class="skeleton-text">
-      <div class="skeleton-line" v-for="i in lines" :key="i" :style="lineStyle(i)"></div>
+      <div v-for="i in lines" :key="i" class="skeleton-line" :style="lineStyle(i)"></div>
     </div>
   </div>
 </template>
