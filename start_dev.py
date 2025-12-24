@@ -70,7 +70,7 @@ def start_backend(backend_dir):
 
     # 启动Django服务器
     backend_proc = subprocess.Popen(
-        [sys.executable, "manage.py", "runserver", "0.0.0.0:8000"],
+        [sys.executable, "manage.py", "runserver", "0.0.0.0:8080"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -78,7 +78,7 @@ def start_backend(backend_dir):
         universal_newlines=True
     )
 
-    print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: 8000)")
+    print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: 8080)")
 
     # 等待后端启动
     print("⏳ 等待后端服务器启动...")
@@ -99,7 +99,7 @@ def start_backend(backend_dir):
     try:
         import urllib.request
         import urllib.error
-        response = urllib.request.urlopen("http://localhost:8000/api/stations/?format=json", timeout=5)
+        response = urllib.request.urlopen("http://localhost:8080/api/stations/?format=json", timeout=5)
         if response.status == 200:
             print("✅ 后端API连接成功")
         else:
@@ -226,13 +226,13 @@ def main():
         print()
         print("🌐 访问地址:")
         print("   前端界面: http://localhost:5173 (或查看Vite输出确认端口)")
-        print("   后端API:  http://localhost:8000/api/")
+        print("   后端API:  http://localhost:8080/api/")
         print()
         print("📊 API端点示例:")
-        print("   - 站点列表: http://localhost:8000/api/stations/")
-        print("   - 列车列表: http://localhost:8000/api/trains/")
-        print("   - 客运记录: http://localhost:8000/api/passenger-flows/")
-        print("   - 客流分析: http://localhost:8000/api/analytics/flow/ (POST)")
+        print("   - 站点列表: http://localhost:8080/api/stations/")
+        print("   - 列车列表: http://localhost:8080/api/trains/")
+        print("   - 客运记录: http://localhost:8080/api/passenger-flows/")
+        print("   - 客流分析: http://localhost:8080/api/analytics/flow/ (POST)")
         print()
         print("🛑 按 Ctrl+C 关闭所有服务器")
         print("=" * 50)

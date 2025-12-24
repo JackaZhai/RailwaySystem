@@ -119,7 +119,7 @@
           <el-card class="summary-card">
             <div class="summary-content">
               <div class="summary-icon">
-                <el-icon><Train /></el-icon>
+                <el-icon><Van /></el-icon>
               </div>
               <div class="summary-info">
                 <div class="summary-value">{{ stats.trains?.toLocaleString() || '0' }}</div>
@@ -630,7 +630,7 @@ import { ElMessage } from 'element-plus'
 import {
   DataBoard,
   Location,
-  Train,
+  Van,
   SetUp,
   Calendar,
   TrendCharts,
@@ -659,8 +659,12 @@ import {
   ElInput,
   ElButton,
   ElPagination,
-  ElIcon
+  ElIcon,
+  ElLoading
 } from 'element-plus'
+
+// 注册指令
+const vLoading = ElLoading.directive
 
 import { dataService } from '@/services/api'
 import type { Station, Train as TrainType, Route, PassengerFlow } from '@/types/data'

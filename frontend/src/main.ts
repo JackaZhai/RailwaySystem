@@ -1,6 +1,9 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
+// 导入Element Plus样式
+import 'element-plus/dist/index.css'
+
 // 导入北欧美学设计系统样式
 import './styles/variables.css'
 import './styles/base.css'
