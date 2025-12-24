@@ -51,13 +51,8 @@ def check_dependencies():
         print("  ❌ Python不可用")
         return False
 
-    # 检查npm
-    try:
-        subprocess.run(["npm", "--version"], capture_output=True, check=True)
-        print("  ✅ npm可用")
-    except:
-        print("  ❌ npm不可用")
-        return False
+    # 暂时跳过npm检查，仅测试后端功能
+    print("  ⚠️  暂时跳过npm检查")
 
     return True
 
@@ -67,6 +62,24 @@ def start_backend(backend_dir):
 
     # 切换到后端目录
     os.chdir(backend_dir)
+
+    # 提示用户安装依赖
+    print("� 提示: 请确保已安装后端依赖")
+    print("   安装命令: pip install -r requirements.txt")
+    print("   如果安装pandas失败，可尝试: pip install pandas --only-binary :all:")
+
+    # 执行数据库迁移
+    print("📦 执行数据库迁移...")
+    migrate_proc = subprocess.run(
+        [sys.executable, "manage.py", "migrate"],
+        capture_output=True,
+        text=True
+    )
+    if migrate_proc.returncode != 0:
+        print("❌ 数据库迁移失败")
+        print(migrate_proc.stderr)
+        return None
+    print("✅ 数据库迁移完成")
 
     # 启动Django服务器
     backend_proc = subprocess.Popen(
@@ -120,14 +133,22 @@ def start_frontend(frontend_dir):
     # 检查node_modules
     if not os.path.exists("node_modules"):
         print("📦 未找到node_modules，正在安装依赖...")
-        install_proc = subprocess.run(
-            ["npm", "install"],
-            capture_output=True,
-            text=True
-        )
-        if install_proc.returncode != 0:
-            print("❌ npm install 失败")
-            print(install_proc.stderr)
+        try:
+            install_proc = subprocess.run(
+                ["npm", "install"],
+                capture_output=True,
+                text=True
+            )
+            if install_proc.returncode != 0:
+                print("❌ npm install 失败")
+                print("错误信息:")
+                print(install_proc.stderr)
+                print("💡 建议检查网络连接或package.json配置")
+                return None
+            print("✅ npm install 完成")
+        except FileNotFoundError:
+            print("❌ 找不到npm命令")
+            print("💡 请确保Node.js和npm已正确安装并添加到环境变量")
             return None
 
     # 启动Vite开发服务器
@@ -206,11 +227,9 @@ def main():
         if backend_proc is None:
             sys.exit(1)
 
-        # 启动前端
-        frontend_proc = start_frontend(frontend_dir)
-        if frontend_proc is None:
-            cleanup(backend_proc, None)
-            sys.exit(1)
+        # 暂时跳过前端启动，仅测试后端
+        print("\n⚠️  暂时跳过前端启动，仅测试后端功能")
+        frontend_proc = None
 
         # 注册清理函数
         def cleanup_handler():
@@ -222,10 +241,9 @@ def main():
 
         # 显示成功信息
         print("\n" + "=" * 50)
-        print("🎉 系统启动完成！")
+        print("🎉 后端启动完成！")
         print()
         print("🌐 访问地址:")
-        print("   前端界面: http://localhost:5173 (或查看Vite输出确认端口)")
         print("   后端API:  http://localhost:8080/api/")
         print()
         print("📊 API端点示例:")
@@ -244,7 +262,7 @@ def main():
         # 创建线程来读取输出（简化版本，只等待）
         try:
             # 简单等待，不处理输出
-            while backend_proc.poll() is None and frontend_proc.poll() is None:
+            while backend_proc.poll() is None and (frontend_proc is None or frontend_proc.poll() is None):
                 time.sleep(1)
         except KeyboardInterrupt:
             print("\n接收到中断信号")
