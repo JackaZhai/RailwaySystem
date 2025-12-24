@@ -2,7 +2,7 @@
   <div class="heatmap-chart">
     <div class="chart-header">
       <h3 class="chart-title">{{ title }}</h3>
-      <div class="chart-actions">
+      <div v-if="!hasCustomLabels" class="chart-actions">
         <button
           class="action-btn"
           :class="{ active: viewMode === 'hourly' }"
@@ -140,9 +140,13 @@ interface TooltipData {
 const props = withDefaults(defineProps<{
   title?: string
   data?: HeatMapCell[][]
+  xLabels?: string[]
+  yLabels?: string[]
 }>(), {
   title: '客流热力图',
-  data: () => []
+  data: () => [],
+  xLabels: () => [],
+  yLabels: () => []
 })
 
 // 视图模式
@@ -169,8 +173,14 @@ const heatmapData = computed(() => {
   return generateMockData()
 })
 
+const hasCustomLabels = computed(() => props.xLabels.length > 0 || props.yLabels.length > 0)
+
 // X轴标签
 const xAxisLabels = computed(() => {
+  if (props.xLabels.length > 0) {
+    return props.xLabels
+  }
+
   switch (viewMode.value) {
     case 'hourly':
       return ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
@@ -185,6 +195,10 @@ const xAxisLabels = computed(() => {
 
 // Y轴标签
 const yAxisLabels = computed(() => {
+  if (props.yLabels.length > 0) {
+    return props.yLabels
+  }
+
   switch (viewMode.value) {
     case 'hourly':
       return ['成都东', '重庆北', '内江北', '资阳北', '永川东']
@@ -306,6 +320,9 @@ const hideTooltip = () => {
 
 // 切换视图模式
 const changeViewMode = (mode: 'hourly' | 'daily' | 'weekly') => {
+  if (hasCustomLabels.value) {
+    return
+  }
   viewMode.value = mode
 }
 

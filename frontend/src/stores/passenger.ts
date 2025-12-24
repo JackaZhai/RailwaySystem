@@ -16,6 +16,8 @@ import type {
   FlowAnomaly,
   ComparisonData,
   HeatmapData,
+  TimePeriodData,
+  FlowLineData,
   TimeGranularity
 } from '@/types/passenger';
 import { passengerService } from '@/services/passengerService';
@@ -56,6 +58,8 @@ export const usePassengerStore = defineStore('passenger', () => {
   const flowAnomalies = ref<FlowAnomaly[]>([]);
   const comparisonData = ref<ComparisonData | null>(null);
   const heatmapData = ref<HeatmapData[]>([]);
+  const timePeriods = ref<TimePeriodData[]>([]);
+  const flowLines = ref<FlowLineData[]>([]);
 
   // 缓存
   const cache = ref<Map<string, any>>(new Map());
@@ -121,6 +125,8 @@ export const usePassengerStore = defineStore('passenger', () => {
     flowAnomalies.value = [];
     comparisonData.value = null;
     heatmapData.value = [];
+    timePeriods.value = [];
+    flowLines.value = [];
     error.value = null;
   };
 
@@ -243,10 +249,10 @@ export const usePassengerStore = defineStore('passenger', () => {
   };
 
   // 获取客流预测
-  const fetchFlowForecasts = async () => {
+  const fetchFlowForecasts = async (days: number = 7) => {
     const data = await fetchData<FlowForecast[]>(
-      'flowForecasts',
-      () => passengerService.getFlowForecast(analysisParams.value)
+      `flowForecasts:${days}`,
+      () => passengerService.getFlowForecast(analysisParams.value, days)
     );
     flowForecasts.value = data;
     return data;
@@ -295,11 +301,32 @@ export const usePassengerStore = defineStore('passenger', () => {
     return data;
   };
 
+  // 获取时间段统计
+  const fetchTimePeriods = async () => {
+    const data = await fetchData<TimePeriodData[]>(
+      'timePeriods',
+      () => passengerService.getTimePeriods(analysisParams.value)
+    );
+    timePeriods.value = data;
+    return data;
+  };
+
+  // 获取流向线数据
+  const fetchFlowLines = async () => {
+    const data = await fetchData<FlowLineData[]>(
+      'flowLines',
+      () => passengerService.getFlowLines(analysisParams.value)
+    );
+    flowLines.value = data;
+    return data;
+  };
+
   // 获取综合分析
-  const fetchComprehensiveAnalysis = async () => {
+  const fetchComprehensiveAnalysis = async (options?: { forecastDays?: number }) => {
     try {
       isLoading.value = true;
       error.value = null;
+      const forecastDays = options?.forecastDays ?? 7;
 
       // 并行获取所有数据
       const [
@@ -307,17 +334,23 @@ export const usePassengerStore = defineStore('passenger', () => {
         rankings,
         loads,
         timeDist,
+        timePeriodsData,
+        heatmap,
+        flowLinesData,
         spatialDist,
         forecasts,
-        anomalies,
+        anomalies
       ] = await Promise.all([
         passengerService.getFlowTrends(analysisParams.value),
         passengerService.getStationRankings(analysisParams.value),
         passengerService.getLineLoads(analysisParams.value),
         passengerService.getTimeDistribution(analysisParams.value),
+        passengerService.getTimePeriods(analysisParams.value),
+        passengerService.getHeatmapData(analysisParams.value),
+        passengerService.getFlowLines(analysisParams.value),
         passengerService.getSpatialDistribution(analysisParams.value),
-        passengerService.getFlowForecast(analysisParams.value),
-        passengerService.getFlowAnomalies(analysisParams.value),
+        passengerService.getFlowForecast(analysisParams.value, forecastDays),
+        passengerService.getFlowAnomalies(analysisParams.value)
       ]);
 
       // 更新状态
@@ -325,6 +358,9 @@ export const usePassengerStore = defineStore('passenger', () => {
       stationRankings.value = rankings;
       lineLoads.value = loads;
       timeDistribution.value = timeDist;
+      timePeriods.value = timePeriodsData;
+      heatmapData.value = heatmap;
+      flowLines.value = flowLinesData;
       spatialDistribution.value = spatialDist;
       flowForecasts.value = forecasts;
       flowAnomalies.value = anomalies;
@@ -334,9 +370,12 @@ export const usePassengerStore = defineStore('passenger', () => {
         rankings,
         loads,
         timeDist,
+        timePeriods: timePeriodsData,
+        heatmap,
+        flowLines: flowLinesData,
         spatialDist,
         forecasts,
-        anomalies,
+        anomalies
       };
     } catch (err: any) {
       error.value = err.message || '获取综合分析失败';
@@ -398,6 +437,8 @@ export const usePassengerStore = defineStore('passenger', () => {
     flowAnomalies,
     comparisonData,
     heatmapData,
+    timePeriods,
+    flowLines,
 
     // 计算属性
     hasData,
@@ -424,6 +465,8 @@ export const usePassengerStore = defineStore('passenger', () => {
     fetchFlowAnomalies,
     fetchComparisonData,
     fetchHeatmapData,
+    fetchTimePeriods,
+    fetchFlowLines,
     fetchComprehensiveAnalysis,
     refreshAllData,
     exportData,

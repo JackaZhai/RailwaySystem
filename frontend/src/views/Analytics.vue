@@ -447,9 +447,13 @@
         <div class="card-body">
           <!-- 热力图模式 -->
           <div v-if="mapViewMode === 'heatmap'" class="heatmap-container">
+            <div v-if="heatmapData.length === 0" class="heatmap-empty">暂无热力图数据</div>
             <HeatMapChart
+              v-else
               title="站点客流热力图"
               :data="heatmapData"
+              :x-labels="heatmapLabels.x"
+              :y-labels="heatmapLabels.y"
             />
           </div>
 
@@ -461,6 +465,7 @@
                   <div class="flow-grid">
                     <div v-for="i in 10" :key="i" class="grid-line"></div>
                   </div>
+                  <div v-if="flowData.length === 0" class="flow-empty">暂无流向数据</div>
                   <div
                     v-for="flow in flowData"
                     :key="flow.id"
@@ -683,7 +688,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { usePassengerStore } from '@/stores/passenger';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 // 组件导入
@@ -692,7 +697,6 @@ import AnimatedNumber from '@/components/ui/AnimatedNumber.vue';
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue';
 import FlowTrendChart from '@/components/passenger/FlowTrendChart.vue';
 import StationRankingTable from '@/components/passenger/StationRankingTable.vue';
-import TimeDistributionChart from '@/components/passenger/TimeDistributionChart.vue';
 
 // Store
 const passengerStore = usePassengerStore();
@@ -846,70 +850,159 @@ const stationRankings = computed(() => {
 
 // 线路负载数据
 const lineLoads = computed(() => {
-  // 使用store中的数据
   const loads = passengerStore.lineLoads;
 
   if (loads.length === 0) {
-    // 如果没有数据，返回空数组
     return [];
   }
 
-  return loads;
+  return loads.map((line) => {
+    const capacity = line.capacity || 1;
+    const occupancyRate = Math.min(100, Math.round((line.totalPassengers / capacity) * 100));
+    const loadRate = Math.min(100, Math.round(line.loadRate * 100));
+
+    return {
+      id: line.lineId,
+      name: line.lineName,
+      code: line.lineCode || line.lineId.toString(),
+      totalPassengers: line.totalPassengers,
+      occupancyRate,
+      loadRate,
+      efficiency: loadRate,
+      trend: 0
+    };
+  });
 });
 
-// 热力图数据（模拟）
-const heatmapData = computed(() => {
+const heatmapBuckets = [
+  { label: '00:00', range: '00:00-03:59', start: 0, end: 4 },
+  { label: '04:00', range: '04:00-07:59', start: 4, end: 8 },
+  { label: '08:00', range: '08:00-11:59', start: 8, end: 12 },
+  { label: '12:00', range: '12:00-15:59', start: 12, end: 16 },
+  { label: '16:00', range: '16:00-19:59', start: 16, end: 20 },
+  { label: '20:00', range: '20:00-23:59', start: 20, end: 24 }
+];
+
+const heatmapLabels = computed(() => {
+  const raw = passengerStore.heatmapData;
+  if (raw.length === 0) {
+    return { x: [], y: [] };
+  }
+
+  const stationTotals = new Map<string, number>();
+  raw.forEach((item) => {
+    stationTotals.set(item.y, (stationTotals.get(item.y) || 0) + item.value);
+  });
+
+  const stations = Array.from(stationTotals.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name]) => name);
+
   return {
-    data: Array.from({ length: 50 }, (_, i) => ({
-      x: `站点${i + 1}`,
-      y: Math.floor(Math.random() * 24).toString(),
-      value: Math.floor(Math.random() * 1000)
-    }))
+    x: heatmapBuckets.map((bucket) => bucket.label),
+    y: stations
   };
 });
 
-// 流向数据（模拟）
-const flowData = computed(() => {
-  return [
-    { id: 1, label: '成都→重庆', style: { left: '20%', top: '30%', width: '200px', transform: 'rotate(45deg)' } },
-    { id: 2, label: '重庆→成都', style: { left: '60%', top: '40%', width: '180px', transform: 'rotate(-30deg)' } },
-    { id: 3, label: '成都→西安', style: { left: '30%', top: '60%', width: '220px', transform: 'rotate(15deg)' } }
-  ];
+// 热力图数据
+const heatmapData = computed(() => {
+  const raw = passengerStore.heatmapData;
+  const labels = heatmapLabels.value;
+
+  if (raw.length === 0 || labels.x.length === 0 || labels.y.length === 0) {
+    return [];
+  }
+
+  const valueMap = new Map<string, number>();
+
+  raw.forEach((item) => {
+    if (!labels.y.includes(item.y)) {
+      return;
+    }
+
+    const hour = Number(item.x.split(':')[0]);
+    if (Number.isNaN(hour)) {
+      return;
+    }
+
+    const bucketIndex = Math.floor(hour / 4);
+    const key = `${item.y}|${bucketIndex}`;
+    valueMap.set(key, (valueMap.get(key) || 0) + item.value);
+  });
+
+  return labels.y.map((station) =>
+    heatmapBuckets.map((bucket, index) => ({
+      value: valueMap.get(`${station}|${index}`) || 0,
+      time: bucket.range,
+      label: station
+    }))
+  );
 });
 
-// 时间分布数据（模拟）
-const timeDistributionData = computed(() => {
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-  return hours.map(hour => ({
-    id: hour,
-    name: `${hour}:00`,
-    time: `${hour}:00-${hour + 1}:00`,
-    percentage: Math.floor(Math.random() * 30) + 10,
-    passengers: Math.floor(Math.random() * 50000) + 20000,
-    trains: Math.floor(Math.random() * 50) + 20
+const flowLineLayouts = [
+  { left: '20%', top: '30%', width: '200px', transform: 'rotate(45deg)' },
+  { left: '60%', top: '40%', width: '180px', transform: 'rotate(-30deg)' },
+  { left: '30%', top: '60%', width: '220px', transform: 'rotate(15deg)' },
+  { left: '55%', top: '25%', width: '160px', transform: 'rotate(60deg)' },
+  { left: '35%', top: '45%', width: '140px', transform: 'rotate(-10deg)' }
+];
+
+// 流向数据
+const flowData = computed(() => {
+  const flows = passengerStore.flowLines;
+  if (flows.length === 0) {
+    return [];
+  }
+
+  const sorted = [...flows].sort((a, b) => b.passengerCount - a.passengerCount);
+
+  return sorted.slice(0, flowLineLayouts.length).map((flow, index) => ({
+    id: `${flow.fromStationId}-${flow.toStationId}-${index}`,
+    label: `${flow.fromStationName || flow.fromStationId}→${flow.toStationName || flow.toStationId}`,
+    style: flowLineLayouts[index] || flowLineLayouts[0],
+    intensity: flow.intensity
   }));
 });
 
-// 预测数据（模拟）
+// 时间分布数据
+const timeDistributionData = computed(() => {
+  const periods = passengerStore.timePeriods;
+  if (periods.length === 0) {
+    return [];
+  }
+
+  return [...periods].sort((a, b) => a.id - b.id);
+});
+
+// 预测数据
 const forecastData = computed(() => {
-  const days = Array.from({ length: forecastDays.value }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() + i + 1);
-    const forecast = Math.floor(Math.random() * 60000) + 40000;
-    const actual = i < 3 ? Math.floor(Math.random() * 60000) + 40000 : undefined;
+  const forecasts = passengerStore.flowForecasts;
+  if (forecasts.length === 0) {
+    return [];
+  }
+
+  const sliced = forecasts.slice(0, forecastDays.value);
+  const maxValue = Math.max(...sliced.map((item) => item.forecast || 0), 0);
+
+  return sliced.map((item, index) => {
+    const date = new Date(item.timestamp);
+    const forecast = Math.round(item.forecast);
+    const actual = item.actual ? Math.round(item.actual) : undefined;
+    const confidence = item.confidence ?? 0;
+    const confidencePercent = confidence <= 1 ? Math.round(confidence * 100) : Math.round(confidence);
 
     return {
-      id: i,
+      id: index,
       day: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.getDay()],
       date: format(date, 'MM/dd'),
       forecast,
       actual,
-      percentage: (forecast / 100000) * 100,
-      actualPercentage: actual ? (actual / 100000) * 100 : 0,
-      confidence: Math.floor(Math.random() * 20) + 80
+      percentage: maxValue > 0 ? (forecast / maxValue) * 100 : 0,
+      actualPercentage: actual && maxValue > 0 ? (actual / maxValue) * 100 : 0,
+      confidence: confidencePercent
     };
   });
-  return days;
 });
 
 // 工具提示样式
@@ -921,10 +1014,57 @@ const lineTooltipStyle = computed(() => {
   };
 });
 
+const setPresetDateRange = (range: 'today' | 'week' | 'month' | 'quarter' | 'year') => {
+  const now = new Date();
+  let rangeStart = now;
+  let rangeEnd = now;
+
+  switch (range) {
+    case 'today':
+      break;
+    case 'week':
+      rangeStart = startOfWeek(now, { locale: zhCN });
+      rangeEnd = endOfWeek(now, { locale: zhCN });
+      break;
+    case 'month':
+      rangeStart = startOfMonth(now);
+      rangeEnd = endOfMonth(now);
+      break;
+    case 'quarter':
+      rangeStart = startOfQuarter(now);
+      rangeEnd = endOfQuarter(now);
+      break;
+    case 'year':
+      rangeStart = startOfYear(now);
+      rangeEnd = endOfYear(now);
+      break;
+    default:
+      break;
+  }
+
+  startDate.value = format(rangeStart, 'yyyy-MM-dd');
+  endDate.value = format(rangeEnd, 'yyyy-MM-dd');
+};
+
+const getGranularity = (frequency: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
+  switch (frequency) {
+    case 'hourly':
+      return 'hour';
+    case 'weekly':
+      return 'week';
+    case 'monthly':
+      return 'month';
+    case 'daily':
+    default:
+      return 'day';
+  }
+};
+
 // 方法
 const selectTimeRange = (range: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom') => {
   selectedRange.value = range;
   if (range !== 'custom') {
+    setPresetDateRange(range);
     loadData();
   }
 };
@@ -952,7 +1092,7 @@ const exportData = () => {
 
 const changeTrendFrequency = (frequency: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
   trendFrequency.value = frequency;
-  // 这里应该重新加载对应粒度的数据
+  loadData();
 };
 
 const changeRankingMetric = (metric: 'total' | 'inbound' | 'outbound') => {
@@ -1003,7 +1143,9 @@ const changeTimeDistributionType = (type: 'hourly' | 'daily' | 'weekly') => {
 
 const changeForecastDays = (days: 7 | 14 | 30) => {
   forecastDays.value = days;
-  // 这里应该重新加载对应天数的预测数据
+  passengerStore.fetchFlowForecasts(days).catch((error) => {
+    console.error('加载预测数据失败:', error);
+  });
 };
 
 const getTimeDistributionClass = (percentage: number) => {
@@ -1016,8 +1158,11 @@ const getTimeDistributionClass = (percentage: number) => {
 const loadData = async () => {
   isLoading.value = true;
   try {
-    // 调用store的方法加载综合分析数据
-    await passengerStore.fetchComprehensiveAnalysis();
+    if (startDate.value && endDate.value) {
+      passengerStore.setTimeRange(startDate.value, endDate.value);
+    }
+    passengerStore.setTimeGranularity(getGranularity(trendFrequency.value));
+    await passengerStore.fetchComprehensiveAnalysis({ forecastDays: forecastDays.value });
   } catch (error) {
     console.error('加载数据失败:', error);
   } finally {
@@ -1027,14 +1172,7 @@ const loadData = async () => {
 
 // 初始化
 onMounted(() => {
-  // 设置默认日期范围
-  const today = new Date();
-  const weekAgo = subDays(today, 7);
-  startDate.value = format(weekAgo, 'yyyy-MM-dd');
-  endDate.value = format(today, 'yyyy-MM-dd');
-
-  // 加载初始数据
-  loadData();
+  selectTimeRange('week');
 });
 </script>
 
@@ -1605,6 +1743,11 @@ onMounted(() => {
         align-items: center;
         justify-content: center;
 
+        .heatmap-empty {
+          color: var(--color-text-secondary);
+          font-size: var(--font-size-sm);
+        }
+
         .flow-placeholder {
           width: 100%;
           height: 100%;
@@ -1646,6 +1789,15 @@ onMounted(() => {
                     border-bottom: none;
                   }
                 }
+              }
+
+              .flow-empty {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: var(--color-text-secondary);
+                font-size: var(--font-size-sm);
               }
 
               .flow-line {

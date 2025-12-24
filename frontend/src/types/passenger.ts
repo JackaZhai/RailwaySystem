@@ -57,6 +57,7 @@ export interface StationRanking {
 export interface LineLoadData {
   lineId: number;
   lineName: string;
+  lineCode?: string;
   totalPassengers: number;
   capacity: number; // 运力
   loadRate: number; // 负载率 (0-1)
@@ -179,6 +180,26 @@ export interface HeatmapData {
   x: string; // 时间或分类
   y: string; // 站点或线路
   value: number; // 客流量
+}
+
+// 时间段统计数据
+export interface TimePeriodData {
+  id: number;
+  name: string;
+  time: string;
+  passengers: number;
+  percentage: number;
+  trains: number;
+}
+
+// 流向线数据
+export interface FlowLineData {
+  fromStationId: number;
+  toStationId: number;
+  fromStationName?: string;
+  toStationName?: string;
+  passengerCount: number;
+  intensity: 'high' | 'medium' | 'low';
 }
 
 // 导出选项

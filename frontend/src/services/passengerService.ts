@@ -15,6 +15,8 @@ import type {
   FlowAnomaly,
   ComparisonData,
   HeatmapData,
+  TimePeriodData,
+  FlowLineData,
   ExportOptions
 } from '@/types/passenger';
 
@@ -79,22 +81,22 @@ export const passengerService = {
   async getFlowTrends(params: AnalysisRequest): Promise<FlowTrendData> {
     try {
       // 调用Django客流分析API
-      const response = await apiClient.post('/analytics/flow/', params);
-      const backendData = response.data;
+      const backendData = await apiClient.post('/analytics/flow/', params);
+      const items = backendData?.data || [];
 
       // 转换数据格式以匹配前端类型
       const flowTrendData: FlowTrendData = {
         granularity: params.timeGranularity || 'day',
-        data: backendData.data.map((item: any) => ({
+        data: items.map((item: any) => ({
           time: item.time_period,
           value: item.total_passengers,
           category: '总客流量'
         })),
-        total: backendData.data.reduce((sum: number, item: any) => sum + item.total_passengers, 0),
-        average: backendData.data.length > 0 ?
-          backendData.data.reduce((sum: number, item: any) => sum + item.total_passengers, 0) / backendData.data.length : 0,
-        max: Math.max(...backendData.data.map((item: any) => item.total_passengers)),
-        min: Math.min(...backendData.data.map((item: any) => item.total_passengers))
+        total: items.reduce((sum: number, item: any) => sum + item.total_passengers, 0),
+        average: items.length > 0 ?
+          items.reduce((sum: number, item: any) => sum + item.total_passengers, 0) / items.length : 0,
+        max: items.length > 0 ? Math.max(...items.map((item: any) => item.total_passengers)) : 0,
+        min: items.length > 0 ? Math.min(...items.map((item: any) => item.total_passengers)) : 0
       };
 
       return flowTrendData;
@@ -137,7 +139,7 @@ export const passengerService = {
   },
 
   /**
-   * 获取线路负载分析 - 暂时使用模拟数据
+   * 获取线路负载分析 - 基于后端线路与客运记录计算
    */
   async getLineLoads(params: AnalysisRequest): Promise<LineLoadData[]> {
     try {
@@ -167,6 +169,7 @@ export const passengerService = {
         return {
           lineId: route.id,
           lineName: route.name || `线路 ${route.code}`,
+          lineCode: route.code ? route.code.toString() : '',
           totalPassengers,
           capacity: 10000, // 模拟运力
           loadRate: totalPassengers / 10000,
@@ -212,41 +215,34 @@ export const passengerService = {
   },
 
   /**
-   * 获取空间分布分析（用于地图）- 暂时使用模拟数据
+   * 获取时间段统计 - 使用Django时段分析API
    */
-  async getSpatialDistribution(params: AnalysisRequest): Promise<SpatialDistribution[]> {
+  async getTimePeriods(params: AnalysisRequest): Promise<TimePeriodData[]> {
     try {
-      // 获取站点排名数据
-      const stationRankings = await this.getStationRankings(params);
-
-      // 模拟地理坐标（实际项目中应从数据库获取）
-      const spatialDistribution: SpatialDistribution[] = stationRankings.slice(0, 20).map((station, index) => {
-        // 为前20个站点生成模拟坐标（成都-重庆区域）
-        const baseLat = 30.6595; // 成都纬度
-        const baseLng = 104.0659; // 成都经度
-        const lat = baseLat + (Math.random() - 0.5) * 2;
-        const lng = baseLng + (Math.random() - 0.5) * 2;
-
-        // 根据客流量计算半径和颜色
-        const radius = Math.max(5, Math.min(30, station.totalPassengers / 10000));
-        const color = station.totalPassengers > 50000 ? '#ff4d4f' :
-                     station.totalPassengers > 20000 ? '#faad14' : '#52c41a';
-
-        return {
-          stationId: station.stationId,
-          stationName: station.stationName,
-          stationTelecode: station.stationTelecode,
-          latitude: lat,
-          longitude: lng,
-          totalPassengers: station.totalPassengers,
-          passengersIn: station.passengersIn,
-          passengersOut: station.passengersOut,
-          radius,
-          color
-        };
+      const response = await apiClient.get('/analytics/time-periods/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds
+        }
       });
 
-      return spatialDistribution;
+      return response || [];
+    } catch (error) {
+      console.error('获取时间段统计失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 获取空间分布分析（用于地图）- 后端暂无坐标数据
+   */
+  async getSpatialDistribution(_params: AnalysisRequest): Promise<SpatialDistribution[]> {
+    try {
+      // 后端未提供站点经纬度，返回空数组避免展示模拟数据
+      return [];
     } catch (error) {
       console.error('获取空间分布失败:', error);
       throw error;
@@ -254,38 +250,29 @@ export const passengerService = {
   },
 
   /**
-   * 获取客流预测 - 暂时使用模拟数据
+   * 获取客流预测 - 使用Django预测API
    */
-  async getFlowForecast(params: AnalysisRequest): Promise<FlowForecast[]> {
+  async getFlowForecast(params: AnalysisRequest, days: number = 7): Promise<FlowForecast[]> {
     try {
-      // 获取历史数据用于预测
-      const trends = await this.getFlowTrends(params);
+      const response = await apiClient.get('/analytics/forecast/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          days,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds
+        }
+      });
 
-      // 生成未来7天的预测数据
-      const forecastData: FlowForecast[] = [];
-      const lastDate = new Date(params.endDate);
-      const avgValue = trends.average;
-
-      for (let i = 1; i <= 7; i++) {
-        const forecastDate = new Date(lastDate);
-        forecastDate.setDate(forecastDate.getDate() + i);
-
-        // 模拟预测值（基于平均值加上随机波动）
-        const baseValue = avgValue;
-        const randomFactor = 0.8 + Math.random() * 0.4; // 0.8-1.2的随机因子
-        const forecastValue = baseValue * randomFactor;
-        const confidence = 0.85 + Math.random() * 0.1; // 85-95%置信度
-
-        forecastData.push({
-          timestamp: forecastDate.toISOString().split('T')[0],
-          forecast: forecastValue,
-          lowerBound: forecastValue * (1 - 0.1 * (1 - confidence)),
-          upperBound: forecastValue * (1 + 0.1 * (1 - confidence)),
-          confidence
-        });
-      }
-
-      return forecastData;
+      return (response || []).map((item: any) => ({
+        timestamp: item.timestamp,
+        actual: item.actual,
+        forecast: item.forecast,
+        lowerBound: item.lowerBound,
+        upperBound: item.upperBound,
+        confidence: item.confidence
+      }));
     } catch (error) {
       console.error('获取客流预测失败:', error);
       throw error;
@@ -325,37 +312,11 @@ export const passengerService = {
   },
 
   /**
-   * 获取客流异常检测 - 暂时使用模拟数据
+   * 获取客流异常检测 - 暂无后端接口
    */
-  async getFlowAnomalies(params: AnalysisRequest): Promise<FlowAnomaly[]> {
+  async getFlowAnomalies(_params: AnalysisRequest): Promise<FlowAnomaly[]> {
     try {
-      // 模拟异常检测数据
-      const stations = await this.getStations();
-      const anomalies: FlowAnomaly[] = [];
-
-      // 随机生成1-3个异常
-      const numAnomalies = Math.floor(Math.random() * 3) + 1;
-      for (let i = 0; i < numAnomalies; i++) {
-        const station = stations[Math.floor(Math.random() * stations.length)];
-        const expectedValue = Math.floor(Math.random() * 1000) + 500;
-        const actualValue = expectedValue * (1.5 + Math.random() * 0.5); // 150-200%的偏差
-        const deviation = ((actualValue - expectedValue) / expectedValue) * 100;
-        const severity: ('low' | 'medium' | 'high')[] = ['low', 'medium', 'high'];
-
-        anomalies.push({
-          id: i + 1,
-          timestamp: new Date().toISOString(),
-          stationId: station.id,
-          stationName: station.name,
-          expectedValue,
-          actualValue,
-          deviation,
-          severity: severity[Math.floor(Math.random() * 3)],
-          description: `站点 ${station.name} 客流量异常偏高`
-        });
-      }
-
-      return anomalies;
+      return [];
     } catch (error) {
       console.error('获取客流异常失败:', error);
       throw error;
@@ -402,26 +363,32 @@ export const passengerService = {
   },
 
   /**
-   * 获取客流热力图数据 - 暂时使用模拟数据
+   * 获取客流热力图数据 - 使用Django热力图API
    */
   async getHeatmapData(params: AnalysisRequest): Promise<HeatmapData[]> {
     try {
-      // 模拟热力图数据
-      const stations = await this.getStations();
-      const timeDistribution = await this.getTimeDistribution(params);
+      const response = await apiClient.get('/analytics/heatmap/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds
+        }
+      });
 
+      const stations = response?.stations || [];
+      const times = response?.times || [];
+      const matrix = response?.data || [];
       const heatmapData: HeatmapData[] = [];
 
-      // 生成站点-时间热力图数据
-      stations.slice(0, 10).forEach(station => {
-        timeDistribution.forEach(timeSlot => {
-          const value = Math.floor(Math.random() * 1000) +
-            (station.id % 10) * 100 + // 使不同站点有基础差异
-            timeSlot.hour * 50; // 使不同时间有基础差异
-
+      stations.forEach((station: string, rowIndex: number) => {
+        const row = matrix[rowIndex] || [];
+        times.forEach((time: string, colIndex: number) => {
+          const value = row[colIndex] ?? 0;
           heatmapData.push({
-            x: `${timeSlot.hour}:00`,
-            y: station.name,
+            x: time,
+            y: station,
             value
           });
         });
@@ -430,6 +397,35 @@ export const passengerService = {
       return heatmapData;
     } catch (error) {
       console.error('获取热力图数据失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 获取流向线数据 - 使用Django客流流向API
+   */
+  async getFlowLines(params: AnalysisRequest): Promise<FlowLineData[]> {
+    try {
+      const response = await apiClient.get('/analytics/flow/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds
+        }
+      });
+
+      return (response || []).map((item: any) => ({
+        fromStationId: item.fromStationId,
+        toStationId: item.toStationId,
+        fromStationName: item.fromStationName,
+        toStationName: item.toStationName,
+        passengerCount: item.passengerCount,
+        intensity: item.intensity
+      }));
+    } catch (error) {
+      console.error('获取流向线数据失败:', error);
       throw error;
     }
   },
