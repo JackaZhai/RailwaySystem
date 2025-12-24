@@ -1,0 +1,1175 @@
+<template>
+  <div class="data-management">
+    <!-- 页面标题和统计卡片 -->
+    <div class="page-header">
+      <h1>数据管理</h1>
+      <div class="stats-cards">
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-icon">
+              <el-icon><DataBoard /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ dataStats.totalRecords?.toLocaleString() || '0' }}</div>
+              <div class="stat-label">总数据量</div>
+            </div>
+          </div>
+        </el-card>
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-icon">
+              <el-icon><Location /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ dataStats.stations?.toLocaleString() || '0' }}</div>
+              <div class="stat-label">站点数量</div>
+            </div>
+          </div>
+        </el-card>
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-icon">
+              <el-icon><Train /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ dataStats.trains?.toLocaleString() || '0' }}</div>
+              <div class="stat-label">列车数量</div>
+            </div>
+          </div>
+        </el-card>
+        <el-card class="stat-card">
+          <div class="stat-content">
+            <div class="stat-icon">
+              <el-icon><Calendar /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ dataStats.dateRange || 'N/A' }}</div>
+              <div class="stat-label">数据时间范围</div>
+            </div>
+          </div>
+        </el-card>
+      </div>
+    </div>
+
+    <!-- 功能标签页 -->
+    <el-tabs v-model="activeTab" class="data-tabs">
+      <!-- 数据上传标签页 -->
+      <el-tab-pane label="数据上传" name="upload">
+        <div class="upload-section">
+          <el-card class="upload-card">
+            <template #header>
+              <div class="card-header">
+                <span>数据文件上传</span>
+                <el-button type="primary" @click="downloadTemplate">下载模板</el-button>
+              </div>
+            </template>
+
+            <!-- 文件上传区域 -->
+            <el-upload
+              class="upload-demo"
+              drag
+              :auto-upload="false"
+              :on-change="handleFileChange"
+              :before-upload="beforeUpload"
+              :show-file-list="false"
+              :disabled="uploading"
+            >
+              <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+              <div class="el-upload__text">
+                拖拽文件到此处或 <em>点击上传</em>
+              </div>
+              <template #tip>
+                <div class="el-upload__tip">
+                  支持 CSV、Excel 格式文件，单个文件不超过 100MB
+                  <div v-if="uploadFile" class="selected-file">
+                    已选择文件: {{ uploadFile.name }}
+                    <el-button type="primary" size="small" @click.stop="handleUpload" :loading="uploading">
+                      开始上传
+                    </el-button>
+                  </div>
+                </div>
+              </template>
+            </el-upload>
+
+            <!-- 上传选项 -->
+            <div class="upload-options">
+              <el-form :model="uploadOptions" label-width="120px">
+                <el-form-item label="上传模式">
+                  <el-radio-group v-model="uploadOptions.mode">
+                    <el-radio label="validate">仅验证</el-radio>
+                    <el-radio label="upload">验证并上传</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item label="数据清洗选项">
+                  <el-checkbox-group v-model="uploadOptions.cleanupOptions">
+                    <el-checkbox label="removeDuplicates">移除重复记录</el-checkbox>
+                    <el-checkbox label="removeInvalid">移除无效数据</el-checkbox>
+                    <el-checkbox label="normalizeDates">日期格式标准化</el-checkbox>
+                  </el-checkbox-group>
+                </el-form-item>
+              </el-form>
+            </div>
+
+            <!-- 上传进度和结果 -->
+            <div v-if="uploadResult" class="upload-result">
+              <el-alert
+                :title="uploadResult.success ? '上传成功' : '上传失败'"
+                :type="uploadResult.success ? 'success' : 'error'"
+                :closable="false"
+                show-icon
+              >
+                <template #default>
+                  <div v-if="uploadResult.success">
+                    <p>成功上传 {{ uploadResult.recordCount || uploadResult.recordsProcessed }} 条记录</p>
+                    <p v-if="uploadResult.duplicatesRemoved">移除了 {{ uploadResult.duplicatesRemoved }} 条重复记录</p>
+                    <p v-if="uploadResult.invalidRemoved">移除了 {{ uploadResult.invalidRemoved }} 条无效记录</p>
+                  </div>
+                  <div v-else>
+                    <p>{{ uploadResult.message }}</p>
+                  </div>
+                </template>
+              </el-alert>
+            </div>
+          </el-card>
+
+          <!-- 数据验证卡片 -->
+          <el-card class="validation-card">
+            <template #header>
+              <div class="card-header">
+                <span>数据验证</span>
+                <el-button type="primary" :loading="validating" @click="validateData">验证数据</el-button>
+              </div>
+            </template>
+
+            <div v-if="validationResult" class="validation-result">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="总记录数">{{ validationResult.totalRecords }}</el-descriptions-item>
+                <el-descriptions-item label="有效记录">{{ validationResult.validRecords }}</el-descriptions-item>
+                <el-descriptions-item label="重复记录">{{ validationResult.duplicateRecords }}</el-descriptions-item>
+                <el-descriptions-item label="无效记录">{{ validationResult.invalidRecords }}</el-descriptions-item>
+                <el-descriptions-item label="缺失字段">{{ validationResult.missingFields }}</el-descriptions-item>
+                <el-descriptions-item label="格式错误">{{ validationResult.formatErrors }}</el-descriptions-item>
+              </el-descriptions>
+
+              <div v-if="validationResult.issues && validationResult.issues.length > 0" class="validation-issues">
+                <h4>问题详情：</h4>
+                <el-table :data="validationResult.issues" style="width: 100%">
+                  <el-table-column prop="row" label="行号" width="80" />
+                  <el-table-column prop="field" label="字段" width="120" />
+                  <el-table-column prop="issue" label="问题描述" />
+                  <el-table-column prop="suggestion" label="建议" />
+                </el-table>
+              </div>
+            </div>
+            <div v-else class="validation-placeholder">
+              <el-empty description="请先上传数据文件进行验证" />
+            </div>
+          </el-card>
+        </div>
+      </el-tab-pane>
+
+      <!-- 数据浏览标签页 -->
+      <el-tab-pane label="数据浏览" name="browse">
+        <div class="browse-section">
+          <!-- 查询条件 -->
+          <el-card class="query-card">
+            <template #header>
+              <div class="card-header">
+                <span>查询条件</span>
+                <div class="query-actions">
+                  <el-button type="primary" @click="searchData">查询</el-button>
+                  <el-button @click="resetQuery">重置</el-button>
+                  <el-button type="success" @click="exportData">导出数据</el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-form :model="queryParams" label-width="100px">
+              <el-row :gutter="20">
+                <el-col :span="8">
+                  <el-form-item label="日期范围">
+                    <el-date-picker
+                      v-model="queryParams.dateRange"
+                      type="daterange"
+                      range-separator="至"
+                      start-placeholder="开始日期"
+                      end-placeholder="结束日期"
+                      value-format="YYYY-MM-DD"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="站点">
+                    <el-select
+                      v-model="queryParams.stationId"
+                      placeholder="选择站点"
+                      filterable
+                      clearable
+                    >
+                      <el-option
+                        v-for="station in stations"
+                        :key="station.id"
+                        :label="station.name"
+                        :value="station.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="线路">
+                    <el-select
+                      v-model="queryParams.lineId"
+                      placeholder="选择线路"
+                      filterable
+                      clearable
+                    >
+                      <el-option
+                        v-for="line in lines"
+                        :key="line.id"
+                        :label="line.name"
+                        :value="line.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="20">
+                <el-col :span="8">
+                  <el-form-item label="列车类型">
+                    <el-select
+                      v-model="queryParams.trainType"
+                      placeholder="选择列车类型"
+                      clearable
+                    >
+                      <el-option label="高铁 (G)" value="G" />
+                      <el-option label="动车 (D)" value="D" />
+                      <el-option label="城际 (C)" value="C" />
+                      <el-option label="直达 (Z)" value="Z" />
+                      <el-option label="特快 (T)" value="T" />
+                      <el-option label="快速 (K)" value="K" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="方向">
+                    <el-select
+                      v-model="queryParams.direction"
+                      placeholder="选择方向"
+                      clearable
+                    >
+                      <el-option label="进站" value="inbound" />
+                      <el-option label="出站" value="outbound" />
+                      <el-option label="双向" value="both" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="关键词">
+                    <el-input
+                      v-model="queryParams.keyword"
+                      placeholder="输入关键词搜索"
+                      clearable
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+          </el-card>
+
+          <!-- 数据表格 -->
+          <el-card class="data-table-card">
+            <template #header>
+              <div class="card-header">
+                <span>数据记录</span>
+                <div class="table-actions">
+                  <el-button type="danger" :disabled="selectedRows.length === 0" @click="batchDelete">
+                    批量删除 ({{ selectedRows.length }})
+                  </el-button>
+                  <el-button @click="refreshData">刷新</el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-table
+              v-loading="loading"
+              :data="tableData"
+              style="width: 100%"
+              @selection-change="handleSelectionChange"
+            >
+              <el-table-column type="selection" width="55" />
+              <el-table-column prop="id" label="ID" width="80" sortable />
+              <el-table-column prop="timestamp" label="时间" width="180" sortable>
+                <template #default="{ row }">
+                  {{ formatDateTime(row.timestamp) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="stationName" label="站点" width="150" />
+              <el-table-column prop="lineName" label="线路" width="120" />
+              <el-table-column prop="direction" label="方向" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="getDirectionTagType(row.direction)">
+                    {{ getDirectionText(row.direction) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="passengerCount" label="客流量" width="120" sortable />
+              <el-table-column label="操作" width="150" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" @click="editRecord(row)">编辑</el-button>
+                  <el-button size="small" type="danger" @click="deleteRecord(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <!-- 分页 -->
+            <div class="pagination-container">
+              <el-pagination
+                v-model:current-page="queryParams.page"
+                v-model:page-size="queryParams.pageSize"
+                :page-sizes="[10, 20, 50, 100]"
+                :total="totalRecords"
+                layout="total, sizes, prev, pager, next, jumper"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+              />
+            </div>
+          </el-card>
+        </div>
+      </el-tab-pane>
+
+      <!-- 数据清洗标签页 -->
+      <el-tab-pane label="数据清洗" name="cleaning">
+        <div class="cleaning-section">
+          <el-card class="cleaning-card">
+            <template #header>
+              <div class="card-header">
+                <span>数据清洗工具</span>
+                <el-button type="primary" :loading="cleaning" @click="runDataCleaning">执行清洗</el-button>
+              </div>
+            </template>
+
+            <el-form :model="cleaningOptions" label-width="150px">
+              <el-form-item label="清洗操作">
+                <el-checkbox-group v-model="cleaningOptions.operations">
+                  <el-checkbox label="removeDuplicates">移除重复记录</el-checkbox>
+                  <el-checkbox label="removeInvalid">移除无效数据</el-checkbox>
+                  <el-checkbox label="fillMissing">填充缺失值</el-checkbox>
+                  <el-checkbox label="normalizeFormat">标准化格式</el-checkbox>
+                  <el-checkbox label="validateConsistency">验证数据一致性</el-checkbox>
+                </el-checkbox-group>
+              </el-form-item>
+
+              <el-form-item label="日期范围">
+                <el-date-picker
+                  v-model="cleaningOptions.dateRange"
+                  type="daterange"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                  value-format="YYYY-MM-DD"
+                />
+              </el-form-item>
+
+              <el-form-item label="缺失值填充策略">
+                <el-radio-group v-model="cleaningOptions.missingValueStrategy">
+                  <el-radio label="mean">使用平均值</el-radio>
+                  <el-radio label="median">使用中位数</el-radio>
+                  <el-radio label="zero">填充为0</el-radio>
+                  <el-radio label="drop">删除记录</el-radio>
+                </el-radio-group>
+              </el-form-item>
+
+              <el-form-item label="重复记录处理">
+                <el-radio-group v-model="cleaningOptions.duplicateStrategy">
+                  <el-radio label="keepFirst">保留第一条</el-radio>
+                  <el-radio label="keepLast">保留最后一条</el-radio>
+                  <el-radio label="average">使用平均值</el-radio>
+                  <el-radio label="sum">求和</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-form>
+
+            <div v-if="cleaningResult" class="cleaning-result">
+              <el-alert
+                :title="`清洗完成：${(cleaningResult.recordsDeleted || 0) + (cleaningResult.recordsUpdated || 0)} 条记录已处理`"
+                type="success"
+                :closable="false"
+                show-icon
+              >
+                <template #default>
+                  <div class="cleaning-details">
+                    <p v-if="cleaningResult.duplicatesRemoved && cleaningResult.duplicatesRemoved > 0">
+                      移除了 {{ cleaningResult.duplicatesRemoved }} 条重复记录
+                    </p>
+                    <p v-if="cleaningResult.invalidRecordsRemoved && cleaningResult.invalidRecordsRemoved > 0">
+                      移除了 {{ cleaningResult.invalidRecordsRemoved }} 条无效记录
+                    </p>
+                    <p v-if="cleaningResult.missingFilled && cleaningResult.missingFilled > 0">
+                      填充了 {{ cleaningResult.missingFilled }} 个缺失值
+                    </p>
+                    <p v-if="cleaningResult.formatFixed && cleaningResult.formatFixed > 0">
+                      修复了 {{ cleaningResult.formatFixed }} 个格式问题
+                    </p>
+                    <p v-if="cleaningResult.inconsistenciesFixed && cleaningResult.inconsistenciesFixed > 0">
+                      修复了 {{ cleaningResult.inconsistenciesFixed }} 个不一致问题
+                    </p>
+                    <p v-if="cleaningResult.recordsDeleted && cleaningResult.recordsDeleted > 0">
+                      删除了 {{ cleaningResult.recordsDeleted }} 条记录
+                    </p>
+                    <p v-if="cleaningResult.recordsUpdated && cleaningResult.recordsUpdated > 0">
+                      更新了 {{ cleaningResult.recordsUpdated }} 条记录
+                    </p>
+                  </div>
+                </template>
+              </el-alert>
+            </div>
+          </el-card>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- 编辑对话框 -->
+    <el-dialog
+      v-model="editDialogVisible"
+      :title="`编辑记录 #${editingRecord?.id}`"
+      width="600px"
+    >
+      <el-form v-if="editingRecord" :model="editingRecord" label-width="100px">
+        <el-form-item label="时间">
+          <el-date-picker
+            v-model="editingRecord.timestamp"
+            type="datetime"
+            placeholder="选择时间"
+            value-format="YYYY-MM-DD HH:mm:ss"
+          />
+        </el-form-item>
+        <el-form-item label="站点">
+          <el-select v-model="editingRecord.stationId" placeholder="选择站点">
+            <el-option
+              v-for="station in stations"
+              :key="station.id"
+              :label="station.name"
+              :value="station.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="线路">
+          <el-select v-model="editingRecord.lineId" placeholder="选择线路">
+            <el-option
+              v-for="line in lines"
+              :key="line.id"
+              :label="line.name"
+              :value="line.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="方向">
+          <el-select v-model="editingRecord.direction" placeholder="选择方向">
+            <el-option label="进站" value="inbound" />
+            <el-option label="出站" value="outbound" />
+            <el-option label="双向" value="both" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="客流量">
+          <el-input-number v-model="editingRecord.passengerCount" :min="0" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveEdit">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  DataBoard,
+  Location,
+  Calendar,
+  UploadFilled
+} from '@element-plus/icons-vue'
+
+// 手动导入Element Plus组件
+import {
+  ElCard,
+  ElTabs,
+  ElTabPane,
+  ElUpload,
+  ElForm,
+  ElFormItem,
+  ElRadioGroup,
+  ElRadio,
+  ElCheckboxGroup,
+  ElCheckbox,
+  ElAlert,
+  ElDescriptions,
+  ElDescriptionsItem,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+  ElDatePicker,
+  ElSelect,
+  ElOption,
+  ElInput,
+  ElButton,
+  ElPagination,
+  ElDialog,
+  ElInputNumber,
+  ElIcon,
+  ElEmpty
+} from 'element-plus'
+
+import { dataService } from '@/services/api'
+import type { PassengerRecord } from '@/types/data'
+import type { DataStats, DataValidationDetailedResult, DataCleanupResult, DataUploadResponse, DataQueryResult } from '@/services/api'
+
+
+// 响应式数据
+const activeTab = ref('upload')
+const uploading = ref(false)
+const validating = ref(false)
+const loading = ref(false)
+const cleaning = ref(false)
+const editDialogVisible = ref(false)
+
+// 统计数据
+const dataStats = reactive<DataStats>({
+  totalRecords: 0,
+  stations: 0,
+  trains: 0,
+  dateRange: '',
+  lastUpdated: ''
+})
+
+// 上传相关
+const uploadFile = ref<File | null>(null)
+const uploadOptions = reactive({
+  mode: 'upload',
+  cleanupOptions: ['removeDuplicates', 'removeInvalid']
+})
+const uploadResult = ref<DataUploadResponse | null>(null)
+
+// 验证相关
+const validationResult = ref<DataValidationDetailedResult | null>(null)
+
+// 查询相关
+const queryParams = reactive({
+  page: 1,
+  pageSize: 20,
+  dateRange: [],
+  stationId: null as number | null,
+  lineId: null as number | null,
+  trainType: '',
+  direction: '',
+  keyword: ''
+})
+
+const tableData = ref<PassengerRecord[]>([])
+const totalRecords = ref(0)
+const selectedRows = ref<PassengerRecord[]>([])
+
+// 清洗相关
+const cleaningOptions = reactive({
+  operations: ['removeDuplicates', 'removeInvalid'],
+  dateRange: [],
+  missingValueStrategy: 'mean',
+  duplicateStrategy: 'keepFirst'
+})
+
+const cleaningResult = ref<DataCleanupResult | null>(null)
+
+// 编辑相关
+const editingRecord = ref<PassengerRecord | null>(null)
+
+// 模拟数据
+const stations = ref([
+  { id: 1, name: '成都东站' },
+  { id: 2, name: '重庆北站' },
+  { id: 3, name: '内江北站' },
+  { id: 4, name: '永川东站' },
+  { id: 5, name: '荣昌北站' }
+])
+
+const lines = ref([
+  { id: 1, name: '成渝高铁' },
+  { id: 2, name: '渝贵铁路' },
+  { id: 3, name: '成贵高铁' },
+  { id: 4, name: '西成高铁' }
+])
+
+// 生命周期
+onMounted(() => {
+  loadDataStats()
+  loadTableData()
+})
+
+// 方法
+const loadDataStats = async () => {
+  try {
+    console.log('开始加载统计数据...')
+    const stats = await dataService.getDataStats() as DataStats
+    console.log('统计数据加载成功:', stats)
+
+    dataStats.totalRecords = stats.totalRecords || 0
+    dataStats.stations = stats.stations || 0
+    dataStats.trains = stats.trains || 0
+    // 处理dateRange，可能是字符串或对象
+    if (typeof stats.dateRange === 'string') {
+      dataStats.dateRange = stats.dateRange
+    } else if (stats.dateRange && typeof stats.dateRange === 'object') {
+      dataStats.dateRange = `${stats.dateRange.minDate} 至 ${stats.dateRange.maxDate}`
+    } else {
+      dataStats.dateRange = ''
+    }
+    dataStats.lastUpdated = stats.lastUpdated || ''
+
+    console.log('统计数据已更新:', dataStats)
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+    ElMessage.error('加载统计数据失败: ' + (error as Error).message)
+  }
+}
+
+const loadTableData = async () => {
+  loading.value = true
+  try {
+    console.log('开始加载表格数据...')
+    const params = {
+      page: queryParams.page,
+      pageSize: queryParams.pageSize,
+      startDate: queryParams.dateRange?.[0],
+      endDate: queryParams.dateRange?.[1],
+      stationIds: queryParams.stationId ? [queryParams.stationId] : [],
+      lineIds: queryParams.lineId ? [queryParams.lineId] : [],
+      search: queryParams.keyword
+      // 注意：后端API目前不支持trainType和direction参数
+    }
+
+    console.log('查询参数:', params)
+    const result = await dataService.getDataRecords(params) as DataQueryResult
+    console.log('表格数据加载成功:', result)
+
+    // 将DataRecord转换为PassengerRecord
+    tableData.value = (result.data || []).map(record => {
+      // 尝试解析timestamp，如果失败则使用当前时间
+      let timestamp: Date
+      try {
+        // timestamp可能是"07:49:00"这样的时间字符串，需要转换为完整日期
+        const timeStr = record.timestamp
+        const today = new Date()
+        const [hours, minutes, seconds] = timeStr.split(':').map(Number)
+        timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, seconds)
+      } catch (error) {
+        console.warn('解析时间戳失败:', record.timestamp, error)
+        timestamp = new Date()
+      }
+
+      return {
+        id: record.id,
+        timestamp: timestamp,
+        stationId: record.stationId,
+        stationName: record.stationName,
+        lineId: record.lineId,
+        lineName: record.lineName,
+        direction: record.direction as 'inbound' | 'outbound' | 'both',
+        passengerCount: (record.passengersIn || 0) + (record.passengersOut || 0),
+        // passengerType, ticketType, fare 不是必需字段，可以省略或使用默认值
+        passengerType: 'adult' as const,
+        ticketType: '',
+        fare: 0
+      }
+    })
+    totalRecords.value = result.total || 0
+
+    console.log('表格数据已更新，记录数:', tableData.value.length)
+  } catch (error) {
+    console.error('加载数据失败:', error)
+    ElMessage.error('加载数据失败: ' + (error as Error).message)
+  } finally {
+    loading.value = false
+    console.log('加载状态结束')
+  }
+}
+
+// 上传相关方法
+const handleFileChange = (file: any) => {
+  if (file && file.raw) {
+    uploadFile.value = file.raw
+    uploadResult.value = null
+    validationResult.value = null
+  }
+}
+
+const beforeUpload = (file: File) => {
+  const isCSV = file.type === 'text/csv' || file.name.endsWith('.csv')
+  const isExcel = file.type.includes('excel') || file.type.includes('spreadsheet') ||
+                  file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+
+  if (!isCSV && !isExcel) {
+    ElMessage.error('只能上传 CSV 或 Excel 文件!')
+    return false
+  }
+
+  const isLt100M = file.size / 1024 / 1024 < 100
+  if (!isLt100M) {
+    ElMessage.error('文件大小不能超过 100MB!')
+    return false
+  }
+
+  return true
+}
+
+const handleUpload = async () => {
+  if (!uploadFile.value) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+
+  uploading.value = true
+  try {
+    // 暂时禁用上传功能，因为后端API未实现
+    ElMessage.info('数据上传功能开发中...')
+
+    // 模拟成功响应
+    uploadResult.value = {
+      success: true,
+      message: '数据上传功能开发中，模拟上传成功',
+      recordsProcessed: 100,
+      recordsFailed: 0,
+      fileInfo: {
+        filename: uploadFile.value.name,
+        size: uploadFile.value.size,
+        type: uploadFile.value.type
+      }
+    } as DataUploadResponse
+
+    ElMessage.success('模拟上传成功（功能开发中）')
+
+    // 刷新数据
+    loadDataStats()
+    if (activeTab.value === 'browse') {
+      loadTableData()
+    }
+  } catch (error) {
+    console.error('上传失败:', error)
+    ElMessage.error('上传失败: ' + ((error as Error).message || '未知错误'))
+  } finally {
+    uploading.value = false
+  }
+}
+
+
+const downloadTemplate = () => {
+  ElMessage.info('模板下载功能开发中...')
+}
+
+const validateData = async () => {
+  if (!uploadFile.value) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+
+  validating.value = true
+  try {
+    // 暂时禁用验证功能，因为后端API未实现
+    ElMessage.info('数据验证功能开发中...')
+
+    // 模拟验证结果
+    validationResult.value = {
+      totalRecords: 100,
+      validRecords: 95,
+      duplicateRecords: 3,
+      invalidRecords: 2,
+      missingFields: 5,
+      formatErrors: 2,
+      issues: [
+        { row: 10, field: 'timestamp', issue: '时间格式错误', suggestion: '使用YYYY-MM-DD HH:mm:ss格式' },
+        { row: 25, field: 'stationId', issue: '站点ID不存在', suggestion: '检查站点ID是否正确' }
+      ]
+    } as DataValidationDetailedResult
+
+    ElMessage.success('模拟数据验证完成（功能开发中）')
+  } catch (error) {
+    console.error('验证失败:', error)
+    ElMessage.error('数据验证失败')
+  } finally {
+    validating.value = false
+  }
+}
+
+// 查询相关方法
+const searchData = () => {
+  queryParams.page = 1
+  loadTableData()
+}
+
+const resetQuery = () => {
+  queryParams.page = 1
+  queryParams.dateRange = []
+  queryParams.stationId = null
+  queryParams.lineId = null
+  queryParams.trainType = ''
+  queryParams.direction = ''
+  queryParams.keyword = ''
+  loadTableData()
+}
+
+const exportData = async () => {
+  try {
+    // 暂时禁用导出功能，因为后端API未实现
+    ElMessage.info('数据导出功能开发中...')
+
+    // 模拟导出成功
+    const content = `模拟CSV导出数据\n时间范围：${queryParams.dateRange?.[0] || '全部'}\n记录数：${totalRecords.value}`
+    const blob = new Blob([content], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `铁路数据_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+
+    ElMessage.success('模拟数据导出成功（功能开发中）')
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  }
+}
+
+const handleSelectionChange = (rows: PassengerRecord[]) => {
+  selectedRows.value = rows
+}
+
+const batchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedRows.value.length} 条记录吗？（功能开发中，不会实际删除）`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    // 暂时禁用批量删除功能，因为后端API未实现
+    ElMessage.info('批量删除功能开发中...')
+
+    // 模拟删除成功
+    ElMessage.success(`模拟删除 ${selectedRows.value.length} 条记录成功（功能开发中）`)
+    selectedRows.value = []
+
+    // 刷新数据
+    loadTableData()
+    loadDataStats()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const refreshData = () => {
+  loadTableData()
+}
+
+const handleSizeChange = (size: number) => {
+  queryParams.pageSize = size
+  loadTableData()
+}
+
+const handleCurrentChange = (page: number) => {
+  queryParams.page = page
+  loadTableData()
+}
+
+// 编辑相关方法
+const editRecord = (record: PassengerRecord) => {
+  editingRecord.value = { ...record }
+  editDialogVisible.value = true
+}
+
+const deleteRecord = async (record: PassengerRecord) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除记录 #${record.id} 吗？（功能开发中，不会实际删除）`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    // 暂时禁用删除功能，因为后端API未实现
+    ElMessage.info('删除功能开发中...')
+
+    // 模拟删除成功
+    ElMessage.success(`模拟删除记录 #${record.id} 成功（功能开发中）`)
+
+    // 刷新数据
+    loadTableData()
+    loadDataStats()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const saveEdit = async () => {
+  if (!editingRecord.value) return
+
+  try {
+    // 暂时禁用编辑保存功能，因为后端API未实现
+    ElMessage.info('数据编辑保存功能开发中...')
+
+    // 暂时使用本地更新
+    const index = tableData.value.findIndex(r => r.id === editingRecord.value!.id)
+    if (index !== -1) {
+      tableData.value[index] = { ...editingRecord.value }
+    }
+
+    ElMessage.success('模拟保存成功（功能开发中）')
+    editDialogVisible.value = false
+  } catch (error) {
+    console.error('保存失败:', error)
+    ElMessage.error('保存失败')
+  }
+}
+
+// 清洗相关方法
+const runDataCleaning = async () => {
+  cleaning.value = true
+  try {
+    // 暂时禁用数据清洗功能，因为后端API未实现
+    ElMessage.info('数据清洗功能开发中...')
+
+    // 模拟清洗结果
+    cleaningResult.value = {
+      success: true,
+      message: '数据清洗功能开发中，模拟清洗完成',
+      recordsDeleted: 10,
+      recordsUpdated: 5,
+      duplicatesRemoved: 3,
+      invalidRecordsRemoved: 7,
+      missingFilled: 8,
+      formatFixed: 4,
+      inconsistenciesFixed: 2
+    } as DataCleanupResult
+
+    ElMessage.success('模拟数据清洗完成（功能开发中）')
+
+    // 刷新数据
+    loadTableData()
+    loadDataStats()
+  } catch (error) {
+    console.error('清洗失败:', error)
+    ElMessage.error('数据清洗失败')
+  } finally {
+    cleaning.value = false
+  }
+}
+
+// 工具函数
+const formatDateTime = (date: Date | string) => {
+  if (!date) return 'N/A'
+  const d = date instanceof Date ? date : new Date(date)
+  if (isNaN(d.getTime())) {
+    // 如果无法解析为有效日期，返回原始字符串
+    return String(date)
+  }
+  return d.toLocaleString('zh-CN')
+}
+
+const getDirectionTagType = (direction: string) => {
+  switch (direction) {
+    case 'inbound': return 'success'
+    case 'outbound': return 'warning'
+    case 'both': return 'info'
+    default: return undefined
+  }
+}
+
+const getDirectionText = (direction: string) => {
+  switch (direction) {
+    case 'inbound': return '进站'
+    case 'outbound': return '出站'
+    case 'both': return '双向'
+    default: return direction
+  }
+}
+</script>
+
+<style>
+/* 导入Element Plus样式（全局） */
+@import 'element-plus/dist/index.css';
+
+.data-management {
+  padding: 20px;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  margin: 0 0 20px 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  :deep(.el-card__body) {
+    padding: 16px;
+  }
+}
+
+.stat-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon {
+  font-size: 32px;
+  color: var(--el-color-primary);
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  margin-top: 4px;
+}
+
+.data-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 20px;
+  }
+}
+
+.upload-section {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.upload-card,
+.validation-card,
+.query-card,
+.data-table-card,
+.cleaning-card {
+  margin-bottom: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upload-demo {
+  margin-bottom: 20px;
+}
+
+.upload-options {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--el-border-color);
+}
+
+.upload-result,
+.validation-result,
+.cleaning-result {
+  margin-top: 20px;
+}
+
+.validation-placeholder {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.validation-issues {
+  margin-top: 20px;
+}
+
+.browse-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.query-actions,
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cleaning-section {
+  max-width: 800px;
+}
+
+.cleaning-details p {
+  margin: 4px 0;
+}
+
+@media (max-width: 1200px) {
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .upload-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .query-actions,
+  .table-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .query-actions .el-button,
+  .table-actions .el-button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+</style>

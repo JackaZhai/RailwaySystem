@@ -762,67 +762,99 @@ const timeRangeDuration = computed(() => {
 
 // KPI数据（模拟）
 const kpiData = computed(() => {
+  // 使用store中的数据
+  const trends = passengerStore.flowTrends;
+  const rankings = passengerStore.stationRankings;
+  const loads = passengerStore.lineLoads;
+
+  if (!trends || rankings.length === 0 || loads.length === 0) {
+    // 如果没有数据，返回默认值
+    return {
+      totalPassengers: 0,
+      avgPassengers: 0,
+      peakStationName: '无数据',
+      peakStationValue: 0,
+      totalRevenue: 0,
+      trends: {
+        totalPassengers: 0,
+        avgPassengers: 0,
+        peakStation: 0,
+        totalRevenue: 0
+      }
+    };
+  }
+
+  // 计算总收入
+  const totalRevenue = rankings.reduce((sum, station) => sum + (station.revenue || 0), 0);
+
+  // 找出最繁忙的站点
+  const peakStation = rankings.length > 0 ? rankings[0] : null;
+
+  // 找出最繁忙的线路
+  const peakLine = loads.length > 0 ? loads.reduce((max, line) =>
+    line.totalPassengers > max.totalPassengers ? line : max
+  ) : null;
+
   return {
-    totalPassengers: 1258473,
-    avgPassengers: 85642,
-    peakStationName: '成都东站',
-    peakStationValue: 245832,
-    totalRevenue: 85642350,
+    totalPassengers: trends.total || 0,
+    avgPassengers: trends.average || 0,
+    peakStationName: peakStation?.stationName || '无数据',
+    peakStationValue: peakStation?.totalPassengers || 0,
+    totalRevenue,
     trends: {
-      totalPassengers: 12.5,
-      avgPassengers: 8.3,
-      peakStation: 15.2,
-      totalRevenue: 18.7
+      totalPassengers: 0, // 暂时设为0，实际项目中可以从历史数据计算
+      avgPassengers: 0,
+      peakStation: 0,
+      totalRevenue: 0
     }
   };
 });
 
-// 趋势数据（模拟）
+// 趋势数据
 const trendData = computed(() => {
-  // 这里应该从store获取真实数据
-  return {
-    granularity: 'day' as const,
-    data: Array.from({ length: 30 }, (_, i) => ({
-      time: format(subDays(new Date(), 29 - i), 'yyyy-MM-dd'),
-      value: Math.floor(Math.random() * 50000) + 30000
-    })),
-    total: 1258473,
-    average: 41949,
-    max: 85642,
-    min: 24583,
-    growthRate: 0.125
-  };
+  // 使用store中的数据
+  const trends = passengerStore.flowTrends;
+
+  if (!trends) {
+    // 如果没有数据，返回默认值
+    return {
+      granularity: 'day' as const,
+      data: [],
+      total: 0,
+      average: 0,
+      max: 0,
+      min: 0,
+      growthRate: 0
+    };
+  }
+
+  return trends;
 });
 
-// 站点排名数据（模拟）
+// 站点排名数据
 const stationRankings = computed(() => {
-  const stations = [
-    '成都东站', '重庆北站', '成都站', '重庆西站', '内江北站',
-    '永川东站', '荣昌北站', '大足南站', '璧山站', '沙坪坝站'
-  ];
+  // 使用store中的数据
+  const rankings = passengerStore.stationRankings;
 
-  return stations.map((name, index) => ({
-    stationId: index + 1,
-    stationName: name,
-    stationTelecode: `CD${String(index + 1).padStart(3, '0')}`,
-    totalPassengers: Math.floor(Math.random() * 200000) + 100000,
-    passengersIn: Math.floor(Math.random() * 100000) + 50000,
-    passengersOut: Math.floor(Math.random() * 100000) + 50000,
-    revenue: Math.floor(Math.random() * 10000000) + 5000000,
-    ranking: index + 1,
-    change: Math.floor(Math.random() * 6) - 3 // -3到+2的变化
-  }));
+  if (rankings.length === 0) {
+    // 如果没有数据，返回空数组
+    return [];
+  }
+
+  return rankings;
 });
 
-// 线路负载数据（模拟）
+// 线路负载数据
 const lineLoads = computed(() => {
-  return [
-    { id: 1, name: '成渝高铁', code: 'G8501', occupancyRate: 85, loadRate: 92, efficiency: 78, trend: 5.2 },
-    { id: 2, name: '成贵高铁', code: 'G2963', occupancyRate: 72, loadRate: 81, efficiency: 65, trend: 3.8 },
-    { id: 3, name: '西成高铁', code: 'D1917', occupancyRate: 91, loadRate: 95, efficiency: 82, trend: 8.1 },
-    { id: 4, name: '成昆铁路', code: 'K113', occupancyRate: 68, loadRate: 75, efficiency: 62, trend: -2.3 },
-    { id: 5, name: '宝成铁路', code: 'T8', occupancyRate: 79, loadRate: 86, efficiency: 71, trend: 1.5 }
-  ];
+  // 使用store中的数据
+  const loads = passengerStore.lineLoads;
+
+  if (loads.length === 0) {
+    // 如果没有数据，返回空数组
+    return [];
+  }
+
+  return loads;
 });
 
 // 热力图数据（模拟）
@@ -984,10 +1016,8 @@ const getTimeDistributionClass = (percentage: number) => {
 const loadData = async () => {
   isLoading.value = true;
   try {
-    // 这里应该调用store的方法加载数据
-    // await passengerStore.loadAnalyticsData({ ... });
-    // 模拟加载延迟
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // 调用store的方法加载综合分析数据
+    await passengerStore.fetchComprehensiveAnalysis();
   } catch (error) {
     console.error('加载数据失败:', error);
   } finally {

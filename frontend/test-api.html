@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API测试</title>
+    <script>
+        async function testDataStats() {
+            try {
+                const response = await fetch('/api/data/stats/');
+                const data = await response.json();
+                document.getElementById('stats-result').innerHTML =
+                    `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('stats-result').innerHTML =
+                    `错误: ${error}`;
+            }
+        }
+
+        async function testDataRecords() {
+            try {
+                const response = await fetch('/api/data/records/?page=1&pageSize=5');
+                const data = await response.json();
+                document.getElementById('records-result').innerHTML =
+                    `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('records-result').innerHTML =
+                    `错误: ${error}`;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>API测试页面</h1>
+
+    <div>
+        <button onclick="testDataStats()">测试数据统计API</button>
+        <div id="stats-result"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <button onclick="testDataRecords()">测试数据记录API</button>
+        <div id="records-result"></div>
+    </div>
+</body>
+</html>

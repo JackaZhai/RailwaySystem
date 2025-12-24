@@ -16,11 +16,11 @@ export default defineConfig(({ mode }) => {
       host: true,
       open: true, // 自动打开浏览器
       proxy: {
-        // 代理API请求到FastAPI后端
+        // 代理API请求到Django后端
         '/api': {
           target: env.VITE_API_BASE_URL || 'http://localhost:8000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          // Django后端API路径已经包含/api前缀，所以不需要重写
         },
         // 高德地图API代理（如果需要）
         '/v3': {

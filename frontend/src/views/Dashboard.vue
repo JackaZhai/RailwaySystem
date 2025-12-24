@@ -607,7 +607,7 @@ import HeatMapChart from '@/components/charts/HeatMapChart.vue'
 import StationMap from '@/components/maps/StationMap.vue'
 import TrendChart from '@/components/charts/TrendChart.vue'
 import PassengerFlowAnalysis from '@/components/analytics/PassengerFlowAnalysis.vue'
-import { dataService, type TimeRange, type KpiData, type Station, type Line, type TrendData, type TimePeriodData } from '@/services/api'
+import { mockService, type TimeRange, type KpiData, type Station, type Line, type TrendData, type TimePeriodData } from '@/services/api'
 
 // 时间范围筛选
 const selectedRange = ref<'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>('today')
@@ -802,13 +802,13 @@ const loadData = async () => {
     isLoading.value = true
     const timeRange = getCurrentTimeRange()
 
-    // 并行加载所有数据
+    // 并行加载所有数据 - 使用模拟数据，因为Django后端没有这些API端点
     const [kpiResponse, stationsResponse, linesResponse, trendResponse, timePeriodResponse] = await Promise.all([
-      dataService.getKpiData(timeRange),
-      dataService.getStations(timeRange),
-      dataService.getLines(timeRange),
-      dataService.getTrendData(timeRange, 'hourly'),
-      dataService.getTimePeriodData(timeRange)
+      mockService.getKpiData(timeRange),
+      mockService.getStations(timeRange),
+      mockService.getLines(timeRange),
+      mockService.getTrendData(timeRange, 'hourly'),
+      mockService.getTimePeriodData(timeRange)
     ])
 
     // 更新数据
@@ -835,8 +835,10 @@ const refreshData = async () => {
   try {
     const timeRange = getCurrentTimeRange()
 
-    // 调用API刷新数据
-    await dataService.refreshData(timeRange)
+    // 调用API刷新数据 - 使用模拟数据
+    // await dataService.refreshData(timeRange)
+    // 模拟刷新延迟
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
     // 重新加载数据
     await loadData()

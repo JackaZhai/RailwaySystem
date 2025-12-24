@@ -1,7 +1,8 @@
 import axios from 'axios'
 
 // API基础配置
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+// 使用相对路径，让Vite代理处理
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // 创建axios实例
 const api = axios.create({
@@ -38,6 +39,15 @@ api.interceptors.response.use(
   }
 )
 
+// 导入新的数据类型
+import type {
+  Station,
+  Train,
+  Route,
+  PassengerFlow,
+  PaginatedResponse
+} from '@/types/data'
+
 // 数据类型定义
 export interface TimeRange {
   startDate: string
@@ -58,32 +68,6 @@ export interface KpiData {
   }
 }
 
-export interface Station {
-  id: number
-  name: string
-  code: string
-  latitude: number
-  longitude: number
-  todayPassengers: number
-  totalPassengers: number
-  occupancyRate: number
-  departures: number
-  arrivals: number
-  delayRate: number
-  connectedLines: string[]
-}
-
-export interface Line {
-  id: number
-  name: string
-  code: string
-  occupancyRate: number
-  loadRate: number
-  efficiency: number
-  industryAverage: number
-  trend: number
-  status: 'high' | 'medium' | 'low'
-}
 
 export interface HeatMapData {
   stations: string[]
@@ -170,6 +154,12 @@ export interface DataQueryParams {
   stationIds?: number[]
   lineIds?: number[]
   search?: string
+  // 以下字段前端使用，但后端API可能不支持
+  stationId?: number | null
+  lineId?: number | null
+  trainType?: string
+  direction?: string
+  keyword?: string
 }
 
 export interface DataQueryResult {
@@ -247,14 +237,99 @@ export const apiService = {
     return api.get<KpiData>('/analytics/kpi/', { params: timeRange })
   },
 
-  // 站点数据
-  getStations: (timeRange: TimeRange) => {
-    return api.get<Station[]>('/analytics/stations/', { params: timeRange })
+  // ========== 4种核心数据表的CRUD接口 ==========
+
+  // 1. 站点数据
+  getStations: (params?: { page?: number; page_size?: number; search?: string }) => {
+    return api.get<PaginatedResponse<Station>>('/stations/', { params })
   },
 
-  // 线路数据
-  getLines: (timeRange: TimeRange) => {
-    return api.get<Line[]>('/analytics/lines/', { params: timeRange })
+  getStation: (id: number) => {
+    return api.get<Station>(`/stations/${id}/`)
+  },
+
+  createStation: (data: Partial<Station>) => {
+    return api.post<Station>('/stations/', data)
+  },
+
+  updateStation: (id: number, data: Partial<Station>) => {
+    return api.put<Station>(`/stations/${id}/`, data)
+  },
+
+  deleteStation: (id: number) => {
+    return api.delete(`/stations/${id}/`)
+  },
+
+  // 2. 列车数据
+  getTrains: (params?: { page?: number; page_size?: number; search?: string }) => {
+    return api.get<PaginatedResponse<Train>>('/trains/', { params })
+  },
+
+  getTrain: (id: number) => {
+    return api.get<Train>(`/trains/${id}/`)
+  },
+
+  createTrain: (data: Partial<Train>) => {
+    return api.post<Train>('/trains/', data)
+  },
+
+  updateTrain: (id: number, data: Partial<Train>) => {
+    return api.put<Train>(`/trains/${id}/`, data)
+  },
+
+  deleteTrain: (id: number) => {
+    return api.delete(`/trains/${id}/`)
+  },
+
+  // 3. 线路数据
+  getRoutes: (params?: { page?: number; page_size?: number; search?: string }) => {
+    return api.get<PaginatedResponse<Route>>('/routes/', { params })
+  },
+
+  getRoute: (id: number) => {
+    return api.get<Route>(`/routes/${id}/`)
+  },
+
+  createRoute: (data: Partial<Route>) => {
+    return api.post<Route>('/routes/', data)
+  },
+
+  updateRoute: (id: number, data: Partial<Route>) => {
+    return api.put<Route>(`/routes/${id}/`, data)
+  },
+
+  deleteRoute: (id: number) => {
+    return api.delete(`/routes/${id}/`)
+  },
+
+  // 4. 客运记录数据
+  getPassengerFlows: (params?: {
+    page?: number
+    page_size?: number
+    start_date?: string
+    end_date?: string
+    route?: number
+    train?: number
+    station?: number
+    search?: string
+  }) => {
+    return api.get<PaginatedResponse<PassengerFlow>>('/passenger-flows/', { params })
+  },
+
+  getPassengerFlow: (id: number) => {
+    return api.get<PassengerFlow>(`/passenger-flows/${id}/`)
+  },
+
+  createPassengerFlow: (data: Partial<PassengerFlow>) => {
+    return api.post<PassengerFlow>('/passenger-flows/', data)
+  },
+
+  updatePassengerFlow: (id: number, data: Partial<PassengerFlow>) => {
+    return api.put<PassengerFlow>(`/passenger-flows/${id}/`, data)
+  },
+
+  deletePassengerFlow: (id: number) => {
+    return api.delete(`/passenger-flows/${id}/`)
   },
 
   // 热力图数据
@@ -329,7 +404,34 @@ export const apiService = {
 
   // 数据查询
   getDataRecords: (params: DataQueryParams) => {
-    return api.get<DataQueryResult>('/data/records/', { params })
+    // 转换参数格式以匹配后端API
+    const backendParams: any = {
+      page: params.page,
+      pageSize: params.pageSize,
+      startDate: params.startDate,
+      endDate: params.endDate,
+      search: params.search
+    }
+
+    // 处理stationIds（后端期望数组）
+    if (params.stationIds && params.stationIds.length > 0) {
+      backendParams['stationIds[]'] = params.stationIds
+    }
+
+    // 处理lineIds（后端期望数组）
+    if (params.lineIds && params.lineIds.length > 0) {
+      backendParams['lineIds[]'] = params.lineIds
+    }
+
+    // 处理排序
+    if (params.sortBy) {
+      backendParams.sortBy = params.sortBy
+    }
+    if (params.sortOrder) {
+      backendParams.sortOrder = params.sortOrder
+    }
+
+    return api.get<DataQueryResult>('/data/records/', { params: backendParams })
   },
 
   // 数据验证
@@ -765,7 +867,8 @@ export const mockService = {
 }
 
 // 根据环境选择使用真实API还是模拟数据
-const useMock = import.meta.env.VITE_USE_MOCK === 'true' || !import.meta.env.VITE_API_BASE_URL
+// 强制使用真实API，因为Django后端已经提供了数据管理API
+const useMock = false  // 强制禁用模拟数据
 
 export const dataService = useMock ? mockService : apiService
 
