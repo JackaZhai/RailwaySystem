@@ -163,6 +163,14 @@ class DataImportService:
 
         # 读取CSV，跳过中文说明行（第二行）
         df = pd.read_csv(file_path, skiprows=[1])
+        has_start_col = 'start_station_telecode' in df.columns
+        has_end_col = 'end_station_telecode' in df.columns
+
+        station_map = {
+            item['id']: item['telecode']
+            for item in Station.objects.values('id', 'telecode')
+        }
+        od_map = self._build_od_telecode_map(df, station_map)
 
         total_records = len(df)
         logger.info(f"总记录数: {total_records}")
@@ -186,6 +194,19 @@ class DataImportService:
                 train = Train.objects.get(id=int(row['lcbm']))
                 station = Station.objects.get(id=int(row['zdid']))
 
+                start_tc = None
+                end_tc = None
+                if has_start_col and pd.notna(row['start_station_telecode']):
+                    start_tc = str(row['start_station_telecode']).strip()
+                if has_end_col and pd.notna(row['end_station_telecode']):
+                    end_tc = str(row['end_station_telecode']).strip()
+                if not start_tc or not end_tc:
+                    od_key = (int(row['yyxlbm']), int(row['lcbm']), str(row['yxrq']))
+                    fallback = od_map.get(od_key)
+                    if fallback:
+                        start_tc = start_tc or fallback[0]
+                        end_tc = end_tc or fallback[1]
+
                 passenger_flow = PassengerFlow(
                     serial_number=int(row['xh']) if pd.notna(row['xh']) else None,
                     route=route,
@@ -198,8 +219,8 @@ class DataImportService:
                     passengers_in=int(row['skl']) if pd.notna(row['skl']) else 0,
                     passengers_out=int(row['xkl']) if pd.notna(row['xkl']) else 0,
                     ticket_price=float(row['ticket_price']) if pd.notna(row['ticket_price']) else None,
-                    start_station_telecode=str(row['start_station_telecode']).strip() if pd.notna(row['start_station_telecode']) else None,
-                    end_station_telecode=str(row['end_station_telecode']).strip() if pd.notna(row['end_station_telecode']) else None,
+                    start_station_telecode=start_tc,
+                    end_station_telecode=end_tc,
                     revenue=float(row['shouru']) if pd.notna(row['shouru']) else None,
                 )
                 passenger_flows.append(passenger_flow)
@@ -222,6 +243,38 @@ class DataImportService:
             PassengerFlow.objects.bulk_create(passenger_flows, ignore_conflicts=True)
 
         logger.info(f"客运记录导入完成，共导入 {len(df)} 条记录")
+
+    def _build_od_telecode_map(self, df, station_map):
+        if 'xlzdid' not in df.columns or 'zdid' not in df.columns:
+            return {}
+        df_valid = df[pd.notna(df['xlzdid']) & pd.notna(df['zdid'])].copy()
+        if df_valid.empty:
+            return {}
+        df_valid['xlzdid'] = df_valid['xlzdid'].astype(int)
+        start_idx = df_valid.groupby(['yyxlbm', 'lcbm', 'yxrq'])['xlzdid'].idxmin()
+        end_idx = df_valid.groupby(['yyxlbm', 'lcbm', 'yxrq'])['xlzdid'].idxmax()
+
+        od_map = {}
+        for idx in start_idx:
+            row = df_valid.loc[idx]
+            key = (int(row['yyxlbm']), int(row['lcbm']), str(row['yxrq']))
+            start_tc = station_map.get(int(row['zdid']))
+            if not start_tc:
+                continue
+            od_map[key] = [start_tc, None]
+
+        for idx in end_idx:
+            row = df_valid.loc[idx]
+            key = (int(row['yyxlbm']), int(row['lcbm']), str(row['yxrq']))
+            end_tc = station_map.get(int(row['zdid']))
+            if not end_tc:
+                continue
+            if key not in od_map:
+                od_map[key] = [None, end_tc]
+            else:
+                od_map[key][1] = end_tc
+
+        return {key: (value[0], value[1]) for key, value in od_map.items() if value[0] and value[1]}
 
     def _parse_date(self, date_str):
         """解析日期字符串 (YYYYMMDD)"""

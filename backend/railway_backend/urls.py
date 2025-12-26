@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from data_management import views as data_views
+from analytics import views as analytics_views
 
 router = routers.DefaultRouter()
 router.register(r'stations', data_views.StationViewSet)
@@ -33,4 +34,8 @@ urlpatterns = [
     # 数据管理API
     path('api/data/stats/', data_views.DataStatsView.as_view(), name='data-stats'),
     path('api/data/records/', data_views.DataRecordsView.as_view(), name='data-records'),
+    path('api/optimization/overview/', analytics_views.OptimizationOverviewView.as_view(), name='optimization-overview'),
+    path('api/optimization/plans/', analytics_views.OptimizationPlanView.as_view(), name='optimization-plan-create'),
+    path('api/optimization/plans/<str:plan_id>/', analytics_views.OptimizationPlanDetailView.as_view(), name='optimization-plan-detail'),
+    path('api/optimization/plans/<str:plan_id>/export/', analytics_views.OptimizationPlanExportView.as_view(), name='optimization-plan-export'),
 ]

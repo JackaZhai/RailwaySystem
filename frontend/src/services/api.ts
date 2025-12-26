@@ -47,6 +47,12 @@ import type {
   PassengerFlow,
   PaginatedResponse
 } from '@/types/data'
+import type {
+  OptimizationFilters,
+  OptimizationOverview,
+  OptimizationPlanRequest,
+  OptimizationPlanResult
+} from '@/types/optimization'
 
 // 数据类型定义
 export interface TimeRange {
@@ -229,6 +235,14 @@ export interface DataValidationDetailedResult {
   formatErrors: number
   issues: ValidationIssue[]
 }
+
+const serializeOptimizationFilters = (filters: OptimizationFilters) => ({
+  rangeType: filters.timeRange.type,
+  startDate: filters.timeRange.startDate,
+  endDate: filters.timeRange.endDate,
+  lineGroup: filters.lineGroup,
+  dayType: filters.dayType
+})
 
 // API接口定义
 export const apiService = {
@@ -480,6 +494,28 @@ export const apiService = {
         records: number
       }>
     }>('/data/stats/')
+  },
+
+  // ========== 线路优化相关接口 ==========
+  getOptimizationOverview: (filters: OptimizationFilters) => {
+    return api.get<OptimizationOverview>('/optimization/overview/', {
+      params: serializeOptimizationFilters(filters)
+    })
+  },
+
+  createOptimizationPlan: (payload: OptimizationPlanRequest) => {
+    return api.post<OptimizationPlanResult>('/optimization/plans/', payload)
+  },
+
+  getOptimizationPlan: (planId: string) => {
+    return api.get<OptimizationPlanResult>(`/optimization/plans/${planId}/`)
+  },
+
+  exportOptimizationPlan: (planId: string, format: 'csv' | 'excel' | 'json') => {
+    return api.get(`/optimization/plans/${planId}/export/`, {
+      params: { format },
+      responseType: 'blob'
+    })
   }
 }
 
@@ -863,6 +899,177 @@ export const mockService = {
         { filename: 'station_info.json', uploadedAt: '2024-01-05 09:15:00', records: 156 }
       ]
     }
+  },
+
+  getOptimizationOverview: async (_filters?: OptimizationFilters): Promise<OptimizationOverview> => {
+    await new Promise(resolve => setTimeout(resolve, 600))
+
+    return {
+      updatedAt: '2024-03-18 09:30',
+      snapshot: {
+        efficiencyScore: 82,
+        loadMatch: 78,
+        peakAbsorb: 84,
+        capacityElastic: 63,
+        overloadedRatio: 40,
+        focusLine: '3号线'
+      },
+      kpis: {
+        averageOccupancy: 74,
+        maxSectionLoad: 102,
+        overloadedCount: 2,
+        idleCount: 1
+      },
+      lines: [
+        { id: 1, name: '1号线', code: 'L1', occupancy: 82, sectionLoad: 94, trend: 6, peakSegment: '南城站 - 中山站' },
+        { id: 2, name: '2号线', code: 'L2', occupancy: 68, sectionLoad: 73, trend: -3, peakSegment: '北站 - 科技园' },
+        { id: 3, name: '3号线', code: 'L3', occupancy: 91, sectionLoad: 102, trend: 9, peakSegment: '大学城 - 东港' },
+        { id: 4, name: '机场线', code: 'A1', occupancy: 52, sectionLoad: 57, trend: -4, peakSegment: '航站楼 - 机场南' },
+        { id: 5, name: '环线', code: 'R1', occupancy: 76, sectionLoad: 88, trend: 2, peakSegment: '金融城 - 南广场' }
+      ],
+      odAlerts: [
+        { segment: '中央站 → 西湖站', load: 1.08, duration: '连续 12 天高负载', suggestion: '建议增开 2 列临客' },
+        { segment: '大学城 → 科技园', load: 0.97, duration: '连续 9 天满载', suggestion: '增加早高峰区间快车' },
+        { segment: '南城 → 东港', load: 0.91, duration: '断面拥挤明显', suggestion: '建议工作日加密班次' }
+      ],
+      odMatrix: {
+        pairs: [
+          { from: '中央站', to: '西湖站', total: 182340, days: 7 },
+          { from: '大学城', to: '科技园', total: 164220, days: 6 },
+          { from: '南城', to: '东港', total: 139880, days: 6 },
+          { from: '金融城', to: '南广场', total: 112540, days: 5 }
+        ]
+      },
+      density: {
+        trains: ['G01', 'G05', 'G12', 'D03', 'K21'],
+        matrix: [
+          { line: '1号线', trains: [
+            { name: 'G01', density: 0.92 },
+            { name: 'G05', density: 0.76 },
+            { name: 'G12', density: 0.64 },
+            { name: 'D03', density: 0.48 },
+            { name: 'K21', density: 0.32 }
+          ] },
+          { line: '2号线', trains: [
+            { name: 'G01', density: 0.58 },
+            { name: 'G05', density: 0.66 },
+            { name: 'G12', density: 0.71 },
+            { name: 'D03', density: 0.43 },
+            { name: 'K21', density: 0.29 }
+          ] },
+          { line: '3号线', trains: [
+            { name: 'G01', density: 0.96 },
+            { name: 'G05', density: 0.84 },
+            { name: 'G12', density: 0.79 },
+            { name: 'D03', density: 0.61 },
+            { name: 'K21', density: 0.54 }
+          ] },
+          { line: '机场线', trains: [
+            { name: 'G01', density: 0.41 },
+            { name: 'G05', density: 0.38 },
+            { name: 'G12', density: 0.45 },
+            { name: 'D03', density: 0.33 },
+            { name: 'K21', density: 0.21 }
+          ] }
+        ]
+      },
+      timetable: [
+        { time: '06:00-08:00', load: 0.92, suggestion: '加密发车至 3-4 分钟' },
+        { time: '08:00-10:00', load: 0.88, suggestion: '保持现有频次，优化站停' },
+        { time: '10:00-16:00', load: 0.55, suggestion: '合并班次，节约运力' },
+        { time: '16:00-19:00', load: 0.93, suggestion: '增加区间车 2 班次' },
+        { time: '19:00-22:00', load: 0.62, suggestion: '恢复均衡发车' }
+      ],
+      hubs: [
+        { name: '中央站', role: '核心枢纽', degree: 0.86, betweenness: 0.74, closeness: 0.69, trend: 4 },
+        { name: '科技园站', role: '通勤换乘', degree: 0.78, betweenness: 0.61, closeness: 0.63, trend: 2 },
+        { name: '南城站', role: '区域枢纽', degree: 0.72, betweenness: 0.57, closeness: 0.58, trend: -1 },
+        { name: '西湖站', role: '旅游集散', degree: 0.68, betweenness: 0.49, closeness: 0.55, trend: 3 }
+      ],
+      recommendations: [
+        {
+          priority: 'P0',
+          priorityClass: 'priority-high',
+          type: '增开建议',
+          title: '早高峰东环线增开 2 列',
+          detail: '07:30-09:00 断面“中央站-东港”持续满载，建议加开短线区间车。',
+          impact: '预计削峰 7%',
+          line: '3号线'
+        },
+        {
+          priority: 'P1',
+          priorityClass: 'priority-medium',
+          type: '时刻表优化',
+          title: '平峰期延长发车间隔',
+          detail: '10:00-15:30 上座率不足 60%，建议将间隔从 6 分钟调整为 8 分钟。',
+          impact: '运力节约 5%',
+          line: '2号线'
+        },
+        {
+          priority: 'P2',
+          priorityClass: 'priority-low',
+          type: '枢纽优化',
+          title: '中央站优化换乘动线',
+          detail: '介数中心性长期居高，建议增加客流引导与分流标识。',
+          impact: '换乘效率 +6%',
+          line: '枢纽网络'
+        }
+      ],
+      scenarios: [
+        { id: 'base', name: '基线方案', status: 'ready', updatedAt: '09:10', owner: '优化中心', tags: ['默认'] },
+        { id: 'peak', name: '早高峰强化', status: 'draft', updatedAt: '08:40', owner: '线路组', tags: ['早高峰', '增开'] },
+        { id: 'green', name: '节能降耗', status: 'running', updatedAt: '09:05', owner: '调度组', tags: ['平峰', '降耗'] }
+      ],
+      insights: [
+        { title: '早高峰瓶颈', detail: '中央站-东港连续三周高负载', tag: '瓶颈', impact: '预计提升 6%' },
+        { title: '平峰冗余', detail: '10:00-15:00 运力利用率偏低', tag: '节能', impact: '预计节约 5%' },
+        { title: '换乘拥堵', detail: '中央站换乘通道流速下降', tag: '枢纽', impact: '预计提升 3%' }
+      ],
+      lastPlan: {
+        id: 'plan-20240318',
+        title: '周内优化方案',
+        status: 'ready',
+        createdAt: '2024-03-18 08:50',
+        expectedImpact: '削峰 7%，节约 4%'
+      }
+    }
+  },
+
+  createOptimizationPlan: async (_payload?: OptimizationPlanRequest): Promise<OptimizationPlanResult> => {
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    return {
+      planId: 'plan-20240318-01',
+      status: 'ready',
+      summary: {
+        id: 'plan-20240318-01',
+        title: '自动生成方案',
+        status: 'ready',
+        createdAt: '2024-03-18 10:10',
+        expectedImpact: '削峰 6%，节约 3%'
+      },
+      recommendations: []
+    }
+  },
+
+  getOptimizationPlan: async (_planId?: string): Promise<OptimizationPlanResult> => {
+    await new Promise(resolve => setTimeout(resolve, 500))
+    return {
+      planId: 'plan-20240318-01',
+      status: 'ready',
+      summary: {
+        id: 'plan-20240318-01',
+        title: '自动生成方案',
+        status: 'ready',
+        createdAt: '2024-03-18 10:10',
+        expectedImpact: '削峰 6%，节约 3%'
+      },
+      recommendations: []
+    }
+  },
+
+  exportOptimizationPlan: async (_planId?: string, _format?: 'csv' | 'excel' | 'json'): Promise<Blob> => {
+    await new Promise(resolve => setTimeout(resolve, 600))
+    return new Blob(['optimization export'], { type: 'text/plain' })
   }
 }
 
