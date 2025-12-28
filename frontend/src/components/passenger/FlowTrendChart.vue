@@ -1,7 +1,7 @@
 <template>
   <div class="flow-trend-chart">
     <!-- 图表标题和操作 -->
-    <div class="chart-header">
+    <div v-if="showHeader" class="chart-header">
       <div class="chart-title">
         <h3>{{ title }}</h3>
         <p class="chart-subtitle" v-if="subtitle">{{ subtitle }}</p>
@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import * as echarts from 'echarts';
 import type { ECharts, EChartsOption } from 'echarts';
 import type { FlowTrendData, FlowTrendPoint } from '@/types/passenger';
@@ -78,6 +78,7 @@ interface Props {
   showActions?: boolean;
   showFooter?: boolean;
   showLegend?: boolean;
+  showHeader?: boolean;
   // 自定义配置
   customOptions?: Partial<EChartsOption>;
 }
@@ -89,6 +90,7 @@ const props = withDefaults(defineProps<Props>(), {
   showActions: true,
   showFooter: true,
   showLegend: true,
+  showHeader: true,
   customOptions: () => ({}),
 });
 
@@ -112,14 +114,26 @@ const stats = computed(() => {
   };
 });
 
+const macaronPalette = [
+  '#F4A7B9',
+  '#A7C7E7',
+  '#B8E0D2',
+  '#FFD6A5',
+  '#CDB4DB',
+  '#FFB7B2',
+  '#BDE0FE',
+];
+
 const legendItems = computed(() => {
-  // 根据数据动态生成图例
-  const items = [
-    { name: '客流量', color: '#5470c6' },
-    { name: '上客量', color: '#91cc75' },
-    { name: '下客量', color: '#fac858' },
-  ];
-  return items;
+  const seriesData = props.data?.data || [];
+  const categories = [...new Set(seriesData.map(item => item.category).filter(Boolean))];
+  if (categories.length > 0) {
+    return categories.map((name, index) => ({
+      name: name as string,
+      color: macaronPalette[index % macaronPalette.length]
+    }));
+  }
+  return [{ name: '客流量', color: macaronPalette[0] }];
 });
 
 // 格式化数字
@@ -166,9 +180,10 @@ const initChart = () => {
         color: '#303133',
       },
       axisPointer: {
-        type: 'shadow',
-        shadowStyle: {
-          color: 'rgba(150, 150, 150, 0.1)',
+        type: 'line',
+        lineStyle: {
+          color: 'rgba(244, 167, 185, 0.4)',
+          width: 2,
         },
       },
       formatter: (params: any) => {
@@ -202,11 +217,11 @@ const initChart = () => {
       boundaryGap: false,
       axisLine: {
         lineStyle: {
-          color: '#dcdfe6',
+          color: '#e6e8ef',
         },
       },
       axisLabel: {
-        color: '#606266',
+        color: '#7b8190',
         fontSize: 12,
       },
     },
@@ -230,7 +245,7 @@ const initChart = () => {
       },
       splitLine: {
         lineStyle: {
-          color: '#f0f0f0',
+          color: '#f2f3f7',
           type: 'dashed',
         },
       },
@@ -260,6 +275,7 @@ const updateChartData = () => {
   const seriesData = data.map(item => item.value);
 
   // 构建系列配置
+  const primaryColor = macaronPalette[0];
   const series: any[] = [
     {
       name: '客流量',
@@ -270,27 +286,29 @@ const updateChartData = () => {
       symbolSize: 6,
       lineStyle: {
         width: 3,
-        color: '#5470c6',
+        color: primaryColor,
+        shadowBlur: 8,
+        shadowColor: 'rgba(244, 167, 185, 0.35)',
       },
       itemStyle: {
-        color: '#5470c6',
+        color: primaryColor,
         borderColor: '#fff',
         borderWidth: 2,
       },
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(84, 112, 198, 0.3)' },
-          { offset: 1, color: 'rgba(84, 112, 198, 0.05)' },
+          { offset: 0, color: 'rgba(244, 167, 185, 0.35)' },
+          { offset: 1, color: 'rgba(244, 167, 185, 0.05)' },
         ]),
       },
       emphasis: {
         focus: 'series',
         itemStyle: {
           color: '#fff',
-          borderColor: '#5470c6',
+          borderColor: primaryColor,
           borderWidth: 3,
           shadowBlur: 10,
-          shadowColor: 'rgba(84, 112, 198, 0.5)',
+          shadowColor: 'rgba(244, 167, 185, 0.45)',
         },
       },
     },
@@ -303,7 +321,7 @@ const updateChartData = () => {
     series.length = 0;
 
     // 为每个分类创建系列
-    const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4'];
+    const colors = macaronPalette;
 
     categories.forEach((category, index) => {
       const categoryData = data.filter(item => item.category === category);
@@ -325,6 +343,9 @@ const updateChartData = () => {
           borderColor: '#fff',
           borderWidth: 2,
         },
+        areaStyle: {
+          opacity: 0.12
+        }
       });
     });
   }
@@ -374,7 +395,8 @@ const updateChartData = () => {
     } : undefined,
   };
 
-  chartInstance.value.setOption(updateOptions, true);
+  chartInstance.value.setOption(updateOptions);
+  chartInstance.value.resize();
 };
 
 // 处理窗口大小变化

@@ -57,7 +57,7 @@
                 </button>
               </div>
             </th>
-            <th class="action-col">操作</th>
+            <th v-if="showActions" class="action-col">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -85,7 +85,7 @@
                 {{ formatMetric(station[column.key], column.key) }}
               </div>
             </td>
-            <td class="action-col">
+            <td v-if="showActions" class="action-col">
               <div class="action-buttons">
                 <button
                   class="btn-action"
@@ -112,7 +112,7 @@
             </td>
           </tr>
           <tr v-if="filteredData.length === 0">
-            <td :colspan="visibleColumns.length + 3" class="empty-state">
+            <td :colspan="tableColumnCount" class="empty-state">
               <div class="empty-content">
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9.172 16.172L4.343 21M14.828 16.172L19.657 21M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -237,6 +237,10 @@ const defaultColumns: TableColumn[] = [
 const visibleColumns = computed(() => {
   const columns = props.columns || defaultColumns;
   return columns.filter(col => col.visible !== false);
+});
+
+const tableColumnCount = computed(() => {
+  return visibleColumns.value.length + 2 + (props.showActions ? 1 : 0);
 });
 
 const filteredData = computed(() => {
@@ -494,7 +498,6 @@ watch(pageSize, () => {
 .ranking-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 800px;
 }
 
 .ranking-table thead {

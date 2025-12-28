@@ -3,7 +3,7 @@
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from 'date-fns';
 import type {
   AnalysisRequest,
   FlowTrendData,
@@ -60,6 +60,11 @@ export const usePassengerStore = defineStore('passenger', () => {
   const heatmapData = ref<HeatmapData[]>([]);
   const timePeriods = ref<TimePeriodData[]>([]);
   const flowLines = ref<FlowLineData[]>([]);
+  const kpiTrends = ref({
+    totalPassengers: 0,
+    avgPassengers: 0,
+    peakStation: 0
+  });
 
   // 缓存
   const cache = ref<Map<string, any>>(new Map());
@@ -127,6 +132,11 @@ export const usePassengerStore = defineStore('passenger', () => {
     heatmapData.value = [];
     timePeriods.value = [];
     flowLines.value = [];
+    kpiTrends.value = {
+      totalPassengers: 0,
+      avgPassengers: 0,
+      peakStation: 0
+    };
     error.value = null;
   };
 
@@ -163,6 +173,55 @@ export const usePassengerStore = defineStore('passenger', () => {
   // 设置选中的列车
   const setSelectedTrains = (trainIds: number[]) => {
     updateAnalysisParams({ trainIds });
+  };
+
+  // 根据数据统计接口同步日期范围
+  const syncDateRangeFromStats = async () => {
+    try {
+      const range = await passengerService.getDataDateRange();
+      if (range?.startDate && range?.endDate) {
+        updateAnalysisParams({
+          startDate: range.startDate,
+          endDate: range.endDate,
+        });
+        return true;
+      }
+    } catch (err) {
+      console.error('同步日期范围失败:', err);
+    }
+    return false;
+  };
+
+  const buildPreviousParams = (params: AnalysisRequest) => {
+    const start = new Date(params.startDate);
+    const end = new Date(params.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return null;
+    }
+
+    let rangeStart = start;
+    let rangeEnd = end;
+    if (rangeStart > rangeEnd) {
+      rangeStart = end;
+      rangeEnd = start;
+    }
+
+    const days = Math.abs(differenceInCalendarDays(rangeEnd, rangeStart)) + 1;
+    const prevEnd = subDays(rangeStart, 1);
+    const prevStart = subDays(prevEnd, Math.max(days - 1, 0));
+
+    return {
+      ...params,
+      startDate: format(prevStart, 'yyyy-MM-dd'),
+      endDate: format(prevEnd, 'yyyy-MM-dd')
+    };
+  };
+
+  const calcTrendValue = (current: number, previous: number) => {
+    if (!previous) {
+      return 0;
+    }
+    return Math.round(((current - previous) / previous) * 10000) / 100;
   };
 
   // 通用数据获取函数
@@ -302,10 +361,10 @@ export const usePassengerStore = defineStore('passenger', () => {
   };
 
   // 获取时间段统计
-  const fetchTimePeriods = async () => {
+  const fetchTimePeriods = async (granularity: 'hourly' | 'daily' | 'weekly' | 'period' = 'period') => {
     const data = await fetchData<TimePeriodData[]>(
-      'timePeriods',
-      () => passengerService.getTimePeriods(analysisParams.value)
+      `timePeriods:${granularity}`,
+      () => passengerService.getTimePeriods(analysisParams.value, granularity)
     );
     timePeriods.value = data;
     return data;
@@ -322,11 +381,12 @@ export const usePassengerStore = defineStore('passenger', () => {
   };
 
   // 获取综合分析
-  const fetchComprehensiveAnalysis = async (options?: { forecastDays?: number }) => {
+  const fetchComprehensiveAnalysis = async (options?: { forecastDays?: number; timeDistributionType?: 'hourly' | 'daily' | 'weekly' | 'period' }) => {
     try {
       isLoading.value = true;
       error.value = null;
       const forecastDays = options?.forecastDays ?? 7;
+      const timeDistributionType = options?.timeDistributionType ?? 'period';
 
       // 并行获取所有数据
       const [
@@ -345,7 +405,7 @@ export const usePassengerStore = defineStore('passenger', () => {
         passengerService.getStationRankings(analysisParams.value),
         passengerService.getLineLoads(analysisParams.value),
         passengerService.getTimeDistribution(analysisParams.value),
-        passengerService.getTimePeriods(analysisParams.value),
+        passengerService.getTimePeriods(analysisParams.value, timeDistributionType),
         passengerService.getHeatmapData(analysisParams.value),
         passengerService.getFlowLines(analysisParams.value),
         passengerService.getSpatialDistribution(analysisParams.value),
@@ -364,6 +424,37 @@ export const usePassengerStore = defineStore('passenger', () => {
       spatialDistribution.value = spatialDist;
       flowForecasts.value = forecasts;
       flowAnomalies.value = anomalies;
+
+      const paramsSnapshot = JSON.stringify(analysisParams.value);
+      const currentPeak = rankings[0]?.totalPassengers || 0;
+      const currentAvg = trends.average || 0;
+      const currentTotal = trends.total || 0;
+
+      void (async () => {
+        const previousParams = buildPreviousParams(analysisParams.value);
+        if (!previousParams) {
+          kpiTrends.value = { totalPassengers: 0, avgPassengers: 0, peakStation: 0 };
+          return;
+        }
+
+        const [previousTrends, previousRankings] = await Promise.all([
+          passengerService.getFlowTrends(previousParams),
+          passengerService.getStationRankings(previousParams)
+        ]);
+
+        if (paramsSnapshot !== JSON.stringify(analysisParams.value)) {
+          return;
+        }
+
+        const previousPeak = previousRankings[0]?.totalPassengers || 0;
+        kpiTrends.value = {
+          totalPassengers: calcTrendValue(currentTotal, previousTrends.total || 0),
+          avgPassengers: calcTrendValue(currentAvg, previousTrends.average || 0),
+          peakStation: calcTrendValue(currentPeak, previousPeak)
+        };
+      })().catch((err) => {
+        console.error('获取KPI趋势失败:', err);
+      });
 
       return {
         trends,
@@ -439,6 +530,7 @@ export const usePassengerStore = defineStore('passenger', () => {
     heatmapData,
     timePeriods,
     flowLines,
+    kpiTrends,
 
     // 计算属性
     hasData,
@@ -454,6 +546,7 @@ export const usePassengerStore = defineStore('passenger', () => {
     setSelectedStations,
     setSelectedLines,
     setSelectedTrains,
+    syncDateRangeFromStats,
 
     fetchFlowTrends,
     fetchStationRankings,

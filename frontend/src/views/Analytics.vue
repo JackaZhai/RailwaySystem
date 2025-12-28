@@ -217,39 +217,6 @@
         </div>
       </div>
 
-      <!-- 总收入 -->
-      <div class="kpi-card">
-        <div class="kpi-header">
-          <div class="kpi-icon revenue">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 1V23M17 5H9.5C8.57174 5 7.6815 5.36875 7.02513 6.02513C6.36875 6.6815 6 7.57174 6 8.5C6 9.42826 6.36875 10.3185 7.02513 10.9749C7.6815 11.6313 8.57174 12 9.5 12H14.5C15.4283 12 16.3185 12.3687 16.9749 13.0251C17.6313 13.6815 18 14.5717 18 15.5C18 16.4283 17.6313 17.3185 16.9749 17.9749C16.3185 18.6313 15.4283 19 14.5 19H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div class="kpi-trend" :class="kpiData.trends.totalRevenue >= 0 ? 'positive' : 'negative'">
-            <span>{{ kpiData.trends.totalRevenue >= 0 ? '+' : '' }}{{ kpiData.trends.totalRevenue }}%</span>
-            <svg v-if="kpiData.trends.totalRevenue >= 0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-        </div>
-        <div class="kpi-content">
-          <template v-if="!isLoading">
-            <h3 class="kpi-value">
-              ¥<AnimatedNumber :value="kpiData.totalRevenue" :duration="1800" :animate="true" />
-            </h3>
-            <p class="kpi-label">总收入</p>
-          </template>
-          <div v-else class="kpi-skeleton">
-            <SkeletonLoader type="text" :lines="2" />
-          </div>
-        </div>
-        <div class="kpi-footer">
-          <span class="kpi-period">{{ timeRangeLabel }}</span>
-        </div>
-      </div>
     </div>
 
     <!-- 主要分析区域 -->
@@ -290,9 +257,13 @@
           </div>
         </div>
         <div class="card-body">
-          <TrendChart
-            title="客流趋势"
+          <FlowTrendChart
             :data="trendData"
+            :show-actions="false"
+            :show-footer="false"
+            :show-legend="false"
+            :show-header="false"
+            height="320px"
           />
         </div>
       </div>
@@ -327,8 +298,12 @@
         </div>
         <div class="card-body">
           <StationRankingTable
+            :key="rankingMetric"
             :data="stationRankings"
             title="站点客流排名"
+            :subtitle="rankingSubtitle"
+            :columns="rankingColumns"
+            :default-sort="rankingSortKey"
             :show-actions="false"
           />
         </div>
@@ -688,7 +663,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { usePassengerStore } from '@/stores/passenger';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInCalendarDays } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 // 组件导入
@@ -753,6 +728,15 @@ const timeRangeLabel = computed(() => {
 });
 
 const timeRangeDuration = computed(() => {
+  if (startDate.value && endDate.value) {
+    const start = new Date(startDate.value);
+    const end = new Date(endDate.value);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const days = Math.abs(differenceInCalendarDays(end, start)) + 1;
+      return `${days}天`;
+    }
+  }
+
   switch (selectedRange.value) {
     case 'today': return '1天';
     case 'week': return '7天';
@@ -770,6 +754,7 @@ const kpiData = computed(() => {
   const trends = passengerStore.flowTrends;
   const rankings = passengerStore.stationRankings;
   const loads = passengerStore.lineLoads;
+  const trendValues = passengerStore.kpiTrends;
 
   if (!trends || rankings.length === 0 || loads.length === 0) {
     // 如果没有数据，返回默认值
@@ -778,18 +763,13 @@ const kpiData = computed(() => {
       avgPassengers: 0,
       peakStationName: '无数据',
       peakStationValue: 0,
-      totalRevenue: 0,
       trends: {
-        totalPassengers: 0,
-        avgPassengers: 0,
-        peakStation: 0,
-        totalRevenue: 0
+        totalPassengers: trendValues.totalPassengers || 0,
+        avgPassengers: trendValues.avgPassengers || 0,
+        peakStation: trendValues.peakStation || 0
       }
     };
   }
-
-  // 计算总收入
-  const totalRevenue = rankings.reduce((sum, station) => sum + (station.revenue || 0), 0);
 
   // 找出最繁忙的站点
   const peakStation = rankings.length > 0 ? rankings[0] : null;
@@ -804,12 +784,10 @@ const kpiData = computed(() => {
     avgPassengers: trends.average || 0,
     peakStationName: peakStation?.stationName || '无数据',
     peakStationValue: peakStation?.totalPassengers || 0,
-    totalRevenue,
     trends: {
-      totalPassengers: 0, // 暂时设为0，实际项目中可以从历史数据计算
-      avgPassengers: 0,
-      peakStation: 0,
-      totalRevenue: 0
+      totalPassengers: trendValues.totalPassengers || 0,
+      avgPassengers: trendValues.avgPassengers || 0,
+      peakStation: trendValues.peakStation || 0
     }
   };
 });
@@ -835,6 +813,23 @@ const trendData = computed(() => {
   return trends;
 });
 
+const rankingConfig = {
+  total: { key: 'totalPassengers', label: '总客流量', subtitle: '按总客流量排序' },
+  inbound: { key: 'passengersIn', label: '到达客流', subtitle: '按到达客流排序' },
+  outbound: { key: 'passengersOut', label: '发送客流', subtitle: '按发送客流排序' }
+} as const;
+
+const rankingSortKey = computed(() => rankingConfig[rankingMetric.value].key);
+const rankingSubtitle = computed(() => rankingConfig[rankingMetric.value].subtitle);
+const rankingColumns = computed(() => [
+  {
+    key: rankingConfig[rankingMetric.value].key,
+    label: rankingConfig[rankingMetric.value].label,
+    sortable: false,
+    visible: true
+  }
+]);
+
 // 站点排名数据
 const stationRankings = computed(() => {
   // 使用store中的数据
@@ -845,7 +840,16 @@ const stationRankings = computed(() => {
     return [];
   }
 
-  return rankings;
+  const sorted = [...rankings].sort((a, b) => {
+    const aValue = a[rankingSortKey.value] || 0;
+    const bValue = b[rankingSortKey.value] || 0;
+    return bValue - aValue;
+  });
+
+  return sorted.map((station, index) => ({
+    ...station,
+    ranking: index + 1
+  }));
 });
 
 // 线路负载数据
@@ -1138,7 +1142,9 @@ const changeMapViewMode = (mode: 'heatmap' | 'flow' | 'markers') => {
 
 const changeTimeDistributionType = (type: 'hourly' | 'daily' | 'weekly') => {
   timeDistributionType.value = type;
-  // 这里应该重新加载对应类型的数据
+  passengerStore.fetchTimePeriods(type).catch((error) => {
+    console.error('加载时间分布数据失败:', error);
+  });
 };
 
 const changeForecastDays = (days: 7 | 14 | 30) => {
@@ -1162,7 +1168,10 @@ const loadData = async () => {
       passengerStore.setTimeRange(startDate.value, endDate.value);
     }
     passengerStore.setTimeGranularity(getGranularity(trendFrequency.value));
-    await passengerStore.fetchComprehensiveAnalysis({ forecastDays: forecastDays.value });
+    await passengerStore.fetchComprehensiveAnalysis({
+      forecastDays: forecastDays.value,
+      timeDistributionType: timeDistributionType.value
+    });
   } catch (error) {
     console.error('加载数据失败:', error);
   } finally {
@@ -1171,7 +1180,15 @@ const loadData = async () => {
 };
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
+  const synced = await passengerStore.syncDateRangeFromStats();
+  if (synced) {
+    selectedRange.value = 'custom';
+    startDate.value = passengerStore.analysisParams.startDate;
+    endDate.value = passengerStore.analysisParams.endDate;
+    await loadData();
+    return;
+  }
   selectTimeRange('week');
 });
 </script>
@@ -1438,11 +1455,6 @@ onMounted(() => {
         &.peak-station {
           background: rgba(210, 105, 30, 0.1);
           svg { color: var(--color-accent); }
-        }
-
-        &.revenue {
-          background: rgba(112, 128, 144, 0.1);
-          svg { color: var(--color-neutral); }
         }
       }
 

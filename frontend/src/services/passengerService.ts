@@ -20,12 +20,9 @@ import type {
   ExportOptions
 } from '@/types/passenger';
 
-// API基础URL
-// 在开发模式下使用相对路径，通过Vite代理
-// 在生产模式下使用完整URL
-const API_BASE_URL = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api')
-  : '/api';
+// API基础URL：优先使用环境变量，其次按环境回退
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+  || (import.meta.env.PROD ? 'http://localhost:8000/api' : '/api');
 
 // 创建axios实例
 const apiClient = axios.create({
@@ -143,42 +140,26 @@ export const passengerService = {
    */
   async getLineLoads(params: AnalysisRequest): Promise<LineLoadData[]> {
     try {
-      // 从Django获取线路数据
-      const routesResponse = await apiClient.get('/routes/');
-      const routes = routesResponse.results || routesResponse;
-
-      // 获取客运记录汇总来计算负载
-      const queryParams = new URLSearchParams();
-      if (params.startDate) queryParams.append('start_date', params.startDate);
-      if (params.endDate) queryParams.append('end_date', params.endDate);
-
-      const flowsResponse = await apiClient.get(`/passenger-flows/?${queryParams}`);
-      const flows = flowsResponse.results || flowsResponse;
-
-      // 按线路分组计算负载
-      const lineLoads: LineLoadData[] = routes.map((route: any) => {
-        const routeFlows = flows.filter((flow: any) => flow.route === route.id);
-        const totalPassengers = routeFlows.reduce((sum: number, flow: any) =>
-          sum + (flow.passengers_in || 0) + (flow.passengers_out || 0), 0);
-
-        // 获取线路站点数量
-        const routeStations = flows.filter((flow: any) => flow.route === route.id)
-          .map((flow: any) => flow.station)
-          .filter((value: any, index: number, self: any[]) => self.indexOf(value) === index);
-
-        return {
-          lineId: route.id,
-          lineName: route.name || `线路 ${route.code}`,
-          lineCode: route.code ? route.code.toString() : '',
-          totalPassengers,
-          capacity: 10000, // 模拟运力
-          loadRate: totalPassengers / 10000,
-          stations: routeStations.length,
-          avgPassengersPerStation: routeStations.length > 0 ? totalPassengers / routeStations.length : 0
-        };
+      const response = await apiClient.get('/analytics/line-loads/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds
+        }
       });
 
-      return lineLoads;
+      return (response || []).map((item: any) => ({
+        lineId: item.lineId,
+        lineName: item.lineName,
+        lineCode: item.lineCode,
+        totalPassengers: item.totalPassengers,
+        capacity: item.capacity,
+        loadRate: item.loadRate,
+        stations: item.stations,
+        avgPassengersPerStation: item.avgPassengersPerStation
+      }));
     } catch (error) {
       console.error('获取线路负载失败:', error);
       throw error;
@@ -217,7 +198,10 @@ export const passengerService = {
   /**
    * 获取时间段统计 - 使用Django时段分析API
    */
-  async getTimePeriods(params: AnalysisRequest): Promise<TimePeriodData[]> {
+  async getTimePeriods(
+    params: AnalysisRequest,
+    granularity: 'hourly' | 'daily' | 'weekly' | 'period' = 'period'
+  ): Promise<TimePeriodData[]> {
     try {
       const response = await apiClient.get('/analytics/time-periods/', {
         params: {
@@ -225,7 +209,8 @@ export const passengerService = {
           endDate: params.endDate,
           stationIds: params.stationIds,
           lineIds: params.lineIds,
-          trainIds: params.trainIds
+          trainIds: params.trainIds,
+          granularity
         }
       });
 
@@ -510,6 +495,29 @@ export const passengerService = {
   /**
    * 获取数据统计摘要 - 使用Django API
    */
+  async getDataDateRange(): Promise<{ startDate: string; endDate: string } | null> {
+    try {
+      const response = await apiClient.get('/data/stats/');
+      const range = response?.dateRange;
+      if (range?.minDate && range?.maxDate) {
+        return {
+          startDate: range.minDate,
+          endDate: range.maxDate
+        };
+      }
+      if (range?.start && range?.end) {
+        return {
+          startDate: range.start,
+          endDate: range.end
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('获取数据日期范围失败:', error);
+      return null;
+    }
+  },
+
   async getDataSummary(): Promise<{
     totalRecords: number;
     dateRange: { start: string; end: string };

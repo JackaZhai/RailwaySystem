@@ -11,6 +11,7 @@ from django.db.models.functions import (
     TruncMonth,
     TruncYear,
     ExtractHour,
+    ExtractIsoWeekDay,
     ExtractQuarter,
     ExtractYear,
     Coalesce,
@@ -19,6 +20,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 import json
 import pandas as pd
+import math
 from datetime import datetime, timedelta, date
 
 from .models import Station, Train, Route, RouteStation, PassengerFlow
@@ -705,9 +707,114 @@ class AnalyticsTimePeriodsView(APIView):
         station_ids = _get_list_param(request, ['station_ids', 'stationIds', 'stationIds[]'])
         route_ids = _get_list_param(request, ['route_ids', 'routeIds', 'line_ids', 'lineIds', 'lineIds[]'])
         train_ids = _get_list_param(request, ['train_ids', 'trainIds', 'trainIds[]'])
+        granularity = (request.query_params.get('granularity') or request.query_params.get('type') or 'period').lower()
 
         queryset = PassengerFlow.objects.filter(operation_date__range=[start_date, end_date])
         queryset = _apply_flow_filters(queryset, station_ids, route_ids, train_ids)
+
+        if granularity in ('hour', 'hourly'):
+            hourly = queryset.annotate(
+                hour=ExtractHour(Coalesce('arrival_time', 'departure_time'))
+            ).exclude(
+                hour__isnull=True
+            ).values(
+                'hour'
+            ).annotate(
+                total=Sum(F('passengers_in') + F('passengers_out')),
+                trains=Count('train', distinct=True)
+            )
+
+            hourly_map = {item['hour']: item for item in hourly}
+            total_passengers = sum(item['total'] or 0 for item in hourly) or 1
+
+            result = []
+            for hour in range(24):
+                stats = hourly_map.get(hour, {})
+                passengers = stats.get('total') or 0
+                trains = stats.get('trains') or 0
+                result.append({
+                    'id': hour + 1,
+                    'name': f'{hour:02d}时',
+                    'time': f'{hour:02d}:00-{hour:02d}:59',
+                    'passengers': passengers,
+                    'percentage': round((passengers / total_passengers) * 100, 2),
+                    'trains': trains
+                })
+
+            return Response(result)
+
+        if granularity in ('day', 'daily'):
+            weekday_stats = queryset.values(
+                weekday=ExtractIsoWeekDay('operation_date')
+            ).annotate(
+                total=Sum(F('passengers_in') + F('passengers_out')),
+                trains=Count('train', distinct=True)
+            )
+
+            weekday_map = {item['weekday']: item for item in weekday_stats}
+            total_passengers = sum(item['total'] or 0 for item in weekday_stats) or 1
+            weekday_labels = {
+                1: '周一',
+                2: '周二',
+                3: '周三',
+                4: '周四',
+                5: '周五',
+                6: '周六',
+                7: '周日'
+            }
+
+            result = []
+            for weekday in range(1, 8):
+                stats = weekday_map.get(weekday, {})
+                passengers = stats.get('total') or 0
+                trains = stats.get('trains') or 0
+                label = weekday_labels[weekday]
+                result.append({
+                    'id': weekday,
+                    'name': label,
+                    'time': '',
+                    'passengers': passengers,
+                    'percentage': round((passengers / total_passengers) * 100, 2),
+                    'trains': trains
+                })
+
+            return Response(result)
+
+        if granularity in ('week', 'weekly'):
+            weekly = queryset.annotate(
+                period=TruncWeek('operation_date')
+            ).values(
+                'period'
+            ).annotate(
+                total=Sum(F('passengers_in') + F('passengers_out')),
+                trains=Count('train', distinct=True)
+            ).order_by('period')
+
+            total_passengers = sum(item['total'] or 0 for item in weekly) or 1
+            result = []
+            for index, item in enumerate(weekly, 1):
+                period_start = item['period']
+                if isinstance(period_start, datetime):
+                    period_start = period_start.date()
+                period_end = period_start + timedelta(days=6) if period_start else None
+                if period_end and period_end > end_date:
+                    period_end = end_date
+                time_label = ''
+                if period_start and period_end:
+                    time_label = f'{period_start:%Y-%m-%d} 至 {period_end:%Y-%m-%d}'
+
+                passengers = item['total'] or 0
+                trains = item['trains'] or 0
+                result.append({
+                    'id': index,
+                    'name': f'第{index}周',
+                    'time': time_label,
+                    'passengers': passengers,
+                    'percentage': round((passengers / total_passengers) * 100, 2),
+                    'trains': trains
+                })
+
+            return Response(result)
 
         hourly = queryset.annotate(
             hour=ExtractHour(Coalesce('arrival_time', 'departure_time'))
@@ -751,6 +858,70 @@ class AnalyticsTimePeriodsView(APIView):
             })
 
         return Response(result)
+
+
+class AnalyticsLineLoadsView(APIView):
+    """线路负载分析数据视图"""
+
+    def get(self, request):
+        start_date, end_date = _get_date_range(request)
+        station_ids = _get_list_param(request, ['station_ids', 'stationIds', 'stationIds[]'])
+        route_ids = _get_list_param(request, ['route_ids', 'routeIds', 'line_ids', 'lineIds', 'lineIds[]'])
+        train_ids = _get_list_param(request, ['train_ids', 'trainIds', 'trainIds[]'])
+
+        queryset = PassengerFlow.objects.filter(operation_date__range=[start_date, end_date])
+        queryset = _apply_flow_filters(queryset, station_ids, route_ids, train_ids)
+
+        route_totals = list(queryset.values(
+            'route_id',
+            'route__name',
+            'route__code'
+        ).annotate(
+            total_passengers=Sum(F('passengers_in') + F('passengers_out')),
+            stations=Count('station', distinct=True)
+        ).order_by('-total_passengers'))
+
+        if not route_totals:
+            return Response([])
+
+        route_ids = [row['route_id'] for row in route_totals]
+
+        capacity_by_route = {}
+        trip_rows = queryset.values(
+            'route_id', 'train_id', 'operation_date', 'train__capacity'
+        ).distinct()
+        for row in trip_rows:
+            route_id = row['route_id']
+            capacity_by_route[route_id] = capacity_by_route.get(route_id, 0) + (row['train__capacity'] or 0)
+
+        station_counts = RouteStation.objects.filter(
+            route_id__in=route_ids
+        ).values('route_id').annotate(
+            count=Count('station', distinct=True)
+        )
+        station_count_map = {row['route_id']: row['count'] for row in station_counts}
+
+        results = []
+        for row in route_totals:
+            total_passengers = int(row['total_passengers'] or 0)
+            capacity = int(capacity_by_route.get(row['route_id'], 0) or 0)
+            stations = int(station_count_map.get(row['route_id'], row['stations'] or 0) or 0)
+            avg_per_station = total_passengers / (stations or 1)
+            load_rate = total_passengers / capacity if capacity else 0
+
+            line_code = row['route__code']
+            results.append({
+                'lineId': row['route_id'],
+                'lineName': row['route__name'] or (f'线路 {line_code}' if line_code is not None else '线路'),
+                'lineCode': str(line_code) if line_code is not None else '',
+                'totalPassengers': total_passengers,
+                'capacity': capacity,
+                'loadRate': round(load_rate, 4),
+                'stations': stations,
+                'avgPassengersPerStation': round(avg_per_station, 2)
+            })
+
+        return Response(results)
 
 
 class AnalyticsTrainsView(APIView):
@@ -872,12 +1043,14 @@ class AnalyticsForecastView(APIView):
     def get(self, request):
         start_date, end_date = _get_date_range(request)
         days = int(request.query_params.get('days', 7))
+        forecast_days = max(1, min(days, 90))
 
         station_ids = _get_list_param(request, ['station_ids', 'stationIds', 'stationIds[]'])
         route_ids = _get_list_param(request, ['route_ids', 'routeIds', 'line_ids', 'lineIds', 'lineIds[]'])
         train_ids = _get_list_param(request, ['train_ids', 'trainIds', 'trainIds[]'])
 
-        queryset = PassengerFlow.objects.filter(operation_date__range=[start_date, end_date])
+        forecast_end = end_date + timedelta(days=forecast_days)
+        queryset = PassengerFlow.objects.filter(operation_date__range=[start_date, forecast_end])
         queryset = _apply_flow_filters(queryset, station_ids, route_ids, train_ids)
         daily = queryset.annotate(
             period=TruncDay('operation_date')
@@ -887,20 +1060,71 @@ class AnalyticsForecastView(APIView):
             total=Sum(F('passengers_in') + F('passengers_out'))
         ).order_by('period')
 
-        totals = [item['total'] or 0 for item in daily]
-        average = sum(totals) / len(totals) if totals else 0
+        history = []
+        future_actuals = {}
+        for item in daily:
+            period = item['period']
+            if isinstance(period, datetime):
+                period = period.date()
+            if not isinstance(period, date):
+                continue
+            total = float(item['total'] or 0)
+            if period <= end_date:
+                history.append((period, total))
+            else:
+                future_actuals[period] = total
+
+        if not history:
+            return Response([])
+
+        history.sort(key=lambda row: row[0])
+        totals = [value for _, value in history]
+
+        window = min(14, len(totals))
+        recent_totals = totals[-window:]
+        mean = sum(recent_totals) / window if window else 0
+
+        variance = 0
+        if window > 1:
+            variance = sum((value - mean) ** 2 for value in recent_totals) / window
+        stdev = math.sqrt(variance) if variance > 0 else 0
+        coefficient = (stdev / mean) if mean else 0
+        confidence = max(0.65, min(0.95, 0.9 - coefficient * 0.5))
+
+        slope = 0
+        if window > 1:
+            x_values = list(range(window))
+            x_mean = sum(x_values) / window
+            y_mean = mean
+            numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, recent_totals))
+            denominator = sum((x - x_mean) ** 2 for x in x_values) or 1
+            slope = numerator / denominator
+
+        weekday_totals = {}
+        for period, total in history:
+            weekday = period.weekday()
+            weekday_totals.setdefault(weekday, []).append(total)
+
+        weekday_avg = {
+            weekday: sum(values) / len(values) for weekday, values in weekday_totals.items()
+        }
 
         forecasts = []
-        base_date = end_date
-        for i in range(1, days + 1):
-            target_date = base_date + timedelta(days=i)
-            forecast = average
+        for i in range(1, forecast_days + 1):
+            target_date = end_date + timedelta(days=i)
+            base = weekday_avg.get(target_date.weekday(), mean)
+            forecast = max(0, base + slope * i)
+            lower = max(0, forecast - 1.64 * stdev)
+            upper = max(lower, forecast + 1.64 * stdev)
+            actual_value = future_actuals.get(target_date)
+
             forecasts.append({
                 'timestamp': target_date.strftime('%Y-%m-%d'),
                 'forecast': round(forecast, 2),
-                'lowerBound': round(forecast * 0.9, 2),
-                'upperBound': round(forecast * 1.1, 2),
-                'confidence': 0.85
+                'lowerBound': round(lower, 2),
+                'upperBound': round(upper, 2),
+                'confidence': round(confidence, 2),
+                'actual': round(actual_value, 2) if actual_value is not None else None
             })
 
         return Response(forecasts)
