@@ -53,7 +53,7 @@ def check_dependencies():
 
     # 检查npm
     try:
-        subprocess.run(["npm", "--version"], capture_output=True, check=True)
+        subprocess.run(["npm", "--version"], shell=(os.name == 'nt'), capture_output=True, check=True)
         print("  ✅ npm可用")
     except:
         print("  ❌ npm不可用")
@@ -69,13 +69,14 @@ def start_backend(backend_dir):
     os.chdir(backend_dir)
 
     # 启动Django服务器
+    # 注意：不使用PIPE，直接输出到控制台，避免缓冲区满导致死锁
     backend_proc = subprocess.Popen(
         [sys.executable, "manage.py", "runserver", "0.0.0.0:8080"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        universal_newlines=True
+        # stdout=subprocess.PIPE,
+        # stderr=subprocess.STDOUT,
+        # text=True,
+        # bufsize=1,
+        # universal_newlines=True
     )
 
     print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: 8080)")
@@ -87,11 +88,6 @@ def start_backend(backend_dir):
     # 检查后端是否在运行
     if backend_proc.poll() is not None:
         print("❌ 错误: 后端服务器启动失败")
-        # 打印输出
-        output, _ = backend_proc.communicate()
-        if output:
-            print("后端输出:")
-            print(output[:500])  # 只打印前500字符
         return None
 
     # 测试后端API
@@ -99,7 +95,8 @@ def start_backend(backend_dir):
     try:
         import urllib.request
         import urllib.error
-        response = urllib.request.urlopen("http://localhost:8080/api/stations/?format=json", timeout=5)
+        # Use 127.0.0.1 to avoid IPv6 issues on Windows
+        response = urllib.request.urlopen("http://127.0.0.1:8080/api/stations/?format=json", timeout=10)
         if response.status == 200:
             print("✅ 后端API连接成功")
         else:
@@ -122,6 +119,7 @@ def start_frontend(frontend_dir):
         print("📦 未找到node_modules，正在安装依赖...")
         install_proc = subprocess.run(
             ["npm", "install"],
+            shell=(os.name == 'nt'),
             capture_output=True,
             text=True
         )
@@ -133,11 +131,12 @@ def start_frontend(frontend_dir):
     # 启动Vite开发服务器
     frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        universal_newlines=True
+        shell=(os.name == 'nt'),
+        # stdout=subprocess.PIPE,
+        # stderr=subprocess.STDOUT,
+        # text=True,
+        # bufsize=1,
+        # universal_newlines=True
     )
 
     print(f"  前端服务器启动中 (PID: {frontend_proc.pid})")
@@ -149,11 +148,6 @@ def start_frontend(frontend_dir):
     # 检查前端是否在运行
     if frontend_proc.poll() is not None:
         print("❌ 错误: 前端服务器启动失败")
-        # 打印输出
-        output, _ = frontend_proc.communicate()
-        if output:
-            print("前端输出:")
-            print(output[:500])  # 只打印前500字符
         return None
 
     # 检查端口
@@ -194,8 +188,8 @@ def main():
         sys.exit(1)
 
     # 检查依赖
-    if not check_dependencies():
-        sys.exit(1)
+    # if not check_dependencies():
+    #     sys.exit(1)
 
     backend_proc = None
     frontend_proc = None

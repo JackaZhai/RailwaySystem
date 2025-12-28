@@ -246,6 +246,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import api from '@/services/api'
 
 interface StationData {
   id: number
@@ -418,14 +419,65 @@ const changeAnalysisType = (type: 'stations' | 'lines' | 'time') => {
 }
 
 // 刷新数据
-const refreshData = () => {
+const refreshData = async () => {
   console.log('刷新客流量分析数据')
-  // 这里将调用API获取最新数据
+  await fetchData()
+}
+
+const fetchData = async () => {
+  try {
+    // 1. Fetch Station Data
+    const stationRes = await api.get<any[]>('/passenger-flows/station_ranking/')
+    if (Array.isArray(stationRes)) {
+      const maxTotal = stationRes.length > 0 ? stationRes[0].total_passengers : 1
+      topStations.value = stationRes.slice(0, 5).map((item: any) => ({
+        id: item.station_id,
+        name: item.station_name,
+        code: item.station_telecode,
+        total: item.total_passengers,
+        inbound: item.passengers_in,
+        outbound: item.passengers_out,
+        transfer: 0,
+        percentage: Math.round((item.total_passengers / maxTotal) * 100),
+        trend: 0
+      }))
+    }
+
+    // 2. Fetch Line Data
+    const lineRes = await api.get<any[]>('/analytics/line-loads/')
+    if (Array.isArray(lineRes)) {
+      lineData.value = lineRes.map((item: any) => ({
+        id: item.lineId,
+        name: item.lineName,
+        code: item.lineCode,
+        totalPassengers: item.totalPassengers,
+        occupancyRate: Math.round(item.loadRate * 100),
+        loadRate: Math.round(item.loadRate * 100),
+        trend: 0
+      }))
+    }
+
+    // 3. Fetch Time Period Data
+    const timeRes = await api.get<any[]>('/analytics/time-periods/', { params: { granularity: 'period' } })
+    if (Array.isArray(timeRes)) {
+      timePeriods.value = timeRes.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        time: item.time,
+        passengers: item.passengers,
+        percentage: item.percentage,
+        trains: item.trains
+      }))
+    }
+
+  } catch (error) {
+    console.error('Failed to fetch analytics data:', error)
+  }
 }
 
 // 初始化
 onMounted(() => {
-  // 可以在这里加载真实数据
+  fetchData()
 })
 </script>
 

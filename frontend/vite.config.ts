@@ -6,7 +6,8 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '')
-  const apiTarget = (env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/api\/?$/, '')
+  // Default to port 8080 as per start_dev.py
+  const apiTarget = (env.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/api\/?$/, '')
 
   return {
     plugins: [vue()],

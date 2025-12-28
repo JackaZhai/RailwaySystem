@@ -1,1 +1,2 @@
 backend/db/railway.sqlite3
+*.pyc

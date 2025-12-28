@@ -56,26 +56,29 @@ def _get_date_range(request):
     end_date = _parse_date(end_value)
 
     if not start_date or not end_date:
-        range_type = data.get('range_type') or data.get('rangeType') or 'month'
-        today = timezone.localdate()
-        if range_type == 'today':
-            start_date = today
-            end_date = today
-        elif range_type == 'week':
-            start_date = today - timedelta(days=6)
-            end_date = today
-        elif range_type == 'month':
-            start_date = today - timedelta(days=29)
-            end_date = today
-        elif range_type == 'quarter':
-            start_date = today - timedelta(days=89)
-            end_date = today
-        elif range_type == 'year':
-            start_date = today - timedelta(days=364)
-            end_date = today
+        # 尝试使用数据库中最新的数据日期
+        last_record = PassengerFlow.objects.order_by('-operation_date').first()
+        if last_record:
+            end_date = last_record.operation_date
         else:
-            start_date = today - timedelta(days=29)
-            end_date = today
+            end_date = timezone.localdate()
+
+        range_type = data.get('range_type') or data.get('rangeType') or 'month'
+        
+        if range_type == 'today':
+            start_date = end_date
+        elif range_type == 'week':
+            start_date = end_date - timedelta(days=6)
+        elif range_type == 'month':
+            start_date = end_date - timedelta(days=29)
+        elif range_type == 'quarter':
+            start_date = end_date - timedelta(days=89)
+        elif range_type == 'year':
+            start_date = end_date - timedelta(days=364)
+        else:
+            start_date = end_date - timedelta(days=29)
+            
+    # print(f"DEBUG: Date range calculated: {start_date} to {end_date}")
 
     if start_date > end_date:
         start_date, end_date = end_date, start_date
@@ -886,13 +889,23 @@ class AnalyticsLineLoadsView(APIView):
 
         route_ids = [row['route_id'] for row in route_totals]
 
-        capacity_by_route = {}
+        # Optimize capacity calculation
+        # Instead of fetching all rows, we can aggregate in DB if possible, or optimize the fetch
+        # Fetch only necessary fields
         trip_rows = queryset.values(
             'route_id', 'train_id', 'operation_date', 'train__capacity'
         ).distinct()
+        
+        # Use a more efficient way to sum
+        capacity_by_route = {}
+        # Pre-calculate to avoid repeated dict lookups
         for row in trip_rows:
-            route_id = row['route_id']
-            capacity_by_route[route_id] = capacity_by_route.get(route_id, 0) + (row['train__capacity'] or 0)
+            r_id = row['route_id']
+            cap = row['train__capacity'] or 0
+            if r_id in capacity_by_route:
+                capacity_by_route[r_id] += cap
+            else:
+                capacity_by_route[r_id] = cap
 
         station_counts = RouteStation.objects.filter(
             route_id__in=route_ids

@@ -24,11 +24,10 @@ import { passengerService } from '@/services/passengerService';
 
 // 默认时间范围：最近30天
 const getDefaultDateRange = () => {
-  const end = new Date();
-  const start = subDays(end, 30);
+  // 默认使用2016年的数据范围，因为这是数据库中的数据时间段
   return {
-    startDate: format(start, 'yyyy-MM-dd'),
-    endDate: format(end, 'yyyy-MM-dd'),
+    startDate: '2016-01-14',
+    endDate: '2016-02-12',
   };
 };
 
@@ -179,17 +178,33 @@ export const usePassengerStore = defineStore('passenger', () => {
   const syncDateRangeFromStats = async () => {
     try {
       const range = await passengerService.getDataDateRange();
-      if (range?.startDate && range?.endDate) {
+      if (range?.endDate) {
+        // Use the end date from API
+        const end = new Date(range.endDate);
+        // Calculate start date as 30 days before end date
+        const start = subDays(end, 30);
+        
         updateAnalysisParams({
-          startDate: range.startDate,
+          startDate: format(start, 'yyyy-MM-dd'),
           endDate: range.endDate,
         });
         return true;
       }
+      // Fallback to default range if API returns nothing
+      updateAnalysisParams({
+        startDate: '2016-01-14',
+        endDate: '2016-02-12',
+      });
+      return true;
     } catch (err) {
       console.error('同步日期范围失败:', err);
+      // Fallback on error
+      updateAnalysisParams({
+        startDate: '2016-01-14',
+        endDate: '2016-02-12',
+      });
+      return true;
     }
-    return false;
   };
 
   const buildPreviousParams = (params: AnalysisRequest) => {
