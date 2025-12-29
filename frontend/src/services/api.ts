@@ -47,6 +47,20 @@ import type {
   PassengerFlow,
   PaginatedResponse
 } from '@/types/data'
+import type {
+  RouteLine,
+  LineStation,
+  RouteOptFilters,
+  RouteKpi,
+  LineLoadHeatmap,
+  LineLoadTrend,
+  SectionCorridor,
+  TripHeatmap,
+  TimetableScatter,
+  SuggestionList,
+  SuggestionDetail,
+  HubMetrics
+} from '@/types/optimization'
 
 // 数据类型定义
 export interface TimeRange {

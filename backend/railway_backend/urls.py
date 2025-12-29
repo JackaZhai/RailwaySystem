@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from data_management import views as data_views
+from analytics import views as analytics_views
 
 router = routers.DefaultRouter()
 router.register(r'stations', data_views.StationViewSet)
@@ -33,4 +34,16 @@ urlpatterns = [
     # 数据管理API
     path('api/data/stats/', data_views.DataStatsView.as_view(), name='data-stats'),
     path('api/data/records/', data_views.DataRecordsView.as_view(), name='data-records'),
+    # Route optimization APIs
+    path('api/lines/', analytics_views.LineListView.as_view(), name='line-list'),
+    path('api/lines/<str:line_id>/stations/', analytics_views.LineStationsView.as_view(), name='line-stations'),
+    path('api/route-opt/kpi/', analytics_views.RouteOptKpiView.as_view(), name='route-opt-kpi'),
+    path('api/route-opt/line-load/heatmap/', analytics_views.LineLoadHeatmapView.as_view(), name='route-opt-line-heatmap'),
+    path('api/route-opt/line-load/trend/', analytics_views.LineLoadTrendView.as_view(), name='route-opt-line-trend'),
+    path('api/route-opt/section-load/corridor/', analytics_views.SectionLoadCorridorView.as_view(), name='route-opt-section-corridor'),
+    path('api/route-opt/trip-load/heatmap/', analytics_views.TripLoadHeatmapView.as_view(), name='route-opt-trip-heatmap'),
+    path('api/route-opt/timetable/demand-scatter/', analytics_views.TimetableDemandScatterView.as_view(), name='route-opt-timetable-scatter'),
+    path('api/route-opt/suggestions/list/', analytics_views.SuggestionListView.as_view(), name='route-opt-suggestions'),
+    path('api/route-opt/suggestions/<str:suggestion_id>/', analytics_views.SuggestionDetailView.as_view(), name='route-opt-suggestion-detail'),
+    path('api/route-opt/hubs/metrics/', analytics_views.HubMetricsView.as_view(), name='route-opt-hubs'),
 ]
