@@ -18,6 +18,10 @@ export interface RouteLine {
   id: string
   name: string
   directions: string[]
+  dateRange?: {
+    minDate: string | null
+    maxDate: string | null
+  }
 }
 
 export interface LineStation {
@@ -73,7 +77,7 @@ export interface SectionCorridor {
 }
 
 export interface TripHeatmap {
-  trips: Array<{ tripId: string; departTime: string }>
+  trips: Array<{ tripId: string; departTime: string; lineId?: string; trainId?: string }>
   segments: Array<{ fromStationId: string; toStationId: string }>
   cells: Array<{ tripId: string; segIndex: number; load: number; flow: number }>
 }

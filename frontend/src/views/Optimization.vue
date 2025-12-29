@@ -51,7 +51,7 @@
       </div>
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">线路</label>
+          <label class="filter-label">线路（有数据日期自动对齐）</label>
           <div class="chip-group">
             <button
               v-for="line in lines"
@@ -91,7 +91,7 @@
       <div class="kpi-card">
         <div class="kpi-title">过载线路</div>
         <div class="kpi-value">{{ kpi?.overloadLineCount ?? 0 }}</div>
-        <div class="kpi-footnote">p95 负载 &gt; {{ filters.threshold.overload.toFixed(2) }}</div>
+        <div class="kpi-footnote">平均负载 &gt; {{ filters.threshold.overload.toFixed(2) }}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">闲置线路</div>
@@ -101,11 +101,13 @@
       <div class="kpi-card">
         <div class="kpi-title">最拥挤区间</div>
         <div class="kpi-value">
-          <span v-if="kpi?.topSection">{{ kpi.topSection.fromStationId }} → {{ kpi.topSection.toStationId }}</span>
+          <span v-if="kpi?.topSection">
+            {{ formatStationName(kpi.topSection.fromStationId) }} → {{ formatStationName(kpi.topSection.toStationId) }}
+          </span>
           <span v-else>-</span>
         </div>
         <div class="kpi-footnote">
-          p95 {{ kpi?.topSection ? kpi.topSection.p95FullRate.toFixed(2) : '无' }}
+          平均负载 {{ kpi?.topSection ? kpi.topSection.p95FullRate.toFixed(2) : '无' }}
         </div>
       </div>
       <div class="kpi-card">
@@ -122,7 +124,9 @@
         <div class="kpi-title">优化建议</div>
         <div class="kpi-value">{{ suggestionList?.total ?? 0 }}</div>
         <div class="kpi-footnote">
-          加开 {{ kpi?.suggestionCount?.addTrips ?? 0 }} · 时刻表 {{ kpi?.suggestionCount?.timetable ?? 0 }} · 枢纽 {{ kpi?.suggestionCount?.hub ?? 0 }}
+          加开 {{ kpi?.suggestionCount?.addTrips ?? 0 }} · 时刻表 {{ kpi?.suggestionCount?.timetable ?? 0 }} · 枢纽 {{
+            kpi?.suggestionCount?.hub ?? 0
+          }}
         </div>
       </div>
     </div>
@@ -135,75 +139,93 @@
     </div>
 
     <div v-if="activeTab === 'line'" class="tab-panel">
-      <div class="panel-grid">
-        <div class="panel-card">
+      <div class="panel-card">
           <div class="panel-header">
             <h3>线路负载热力</h3>
             <span class="panel-subtitle">按小时的平均与 p95 负载</span>
           </div>
           <div class="heatmap">
-            <div class="heatmap-header">
-              <div class="heatmap-spacer"></div>
-              <div v-for="label in lineHeatmap?.xAxis || []" :key="label" class="heatmap-label">{{ label }}</div>
+            <div v-for="(row, rowIndex) in heatmapGrid" :key="rowIndex" class="heatmap-row">
+              <div class="heatmap-line-label">{{ row.label }}</div>
+              <div class="heatmap-cells">
+                <div
+                  v-for="(cell, cellIndex) in row.cells"
+                  :key="cellIndex"
+                  class="heatmap-cell-block"
+                >
+                  <div class="heatmap-time">{{ cell.time }}</div>
+                  <button
+                    class="heatmap-cell"
+                    :style="{ background: cell.color }"
+                    @click="selectHeatCell(row.label, cell)"
+                  >
+                    <span>{{ cell.value.toFixed(2) }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <div
-              v-for="(row, rowIndex) in heatmapGrid"
-              :key="rowIndex"
-              class="heatmap-row"
-            >
-              <div class="heatmap-label y-label">{{ row.label }}</div>
-              <button
-                v-for="(cell, cellIndex) in row.cells"
-                :key="cellIndex"
-                class="heatmap-cell"
-                :style="{ background: cell.color }"
-                @click="selectHeatCell(row.label, cell)"
-              >
-                <span>{{ cell.value.toFixed(2) }}</span>
-              </button>
+          </div>
+
+          <div class="selection-panel">
+            <div class="panel-header compact">
+              <h3>选中详情</h3>
+              <span class="panel-subtitle">点击热力格查看负载</span>
             </div>
+            <div class="selection-card" v-if="selectedHeatCell">
+              <div class="selection-title">{{ selectedHeatCell.line }}</div>
+              <div class="selection-row">
+                <span>时间</span>
+                <strong>{{ selectedHeatCell.time }}</strong>
+              </div>
+              <div class="selection-row">
+                <span>平均负载</span>
+                <strong>{{ selectedHeatCell.avgLoad.toFixed(2) }}</strong>
+              </div>
+              <div class="selection-row">
+                <span>p95 负载</span>
+                <strong>{{ selectedHeatCell.p95Load.toFixed(2) }}</strong>
+              </div>
+              <div class="selection-row">
+                <span>超载分钟</span>
+                <strong>{{ selectedHeatCell.overMinutes }}</strong>
+              </div>
+            </div>
+            <div v-else class="empty-state">请选择热力格查看详情。</div>
           </div>
         </div>
-        <div class="panel-card side-panel">
-          <div class="panel-header">
-            <h3>选中详情</h3>
-            <span class="panel-subtitle">点击热力格查看负载</span>
-          </div>
-          <div class="selection-card" v-if="selectedHeatCell">
-            <div class="selection-title">{{ selectedHeatCell.line }}</div>
-            <div class="selection-row">
-              <span>时间</span>
-              <strong>{{ selectedHeatCell.time }}</strong>
-            </div>
-            <div class="selection-row">
-              <span>平均负载</span>
-              <strong>{{ selectedHeatCell.avgLoad.toFixed(2) }}</strong>
-            </div>
-            <div class="selection-row">
-              <span>p95 负载</span>
-              <strong>{{ selectedHeatCell.p95Load.toFixed(2) }}</strong>
-            </div>
-            <div class="selection-row">
-              <span>超载分钟</span>
-              <strong>{{ selectedHeatCell.overMinutes }}</strong>
-            </div>
-          </div>
-          <div v-else class="empty-state">请选择热力格查看详情。</div>
-        </div>
-      </div>
       <div class="panel-card trend-card">
-        <LineChart
-          v-if="lineTrendSeries.length > 0"
-          chart-id="line-load-trend"
-          :title="'线路负载趋势'"
-          :x-axis-data="lineTrendXAxis"
-          :series="lineTrendSeries"
-          y-axis-name="负载"
-          :legend="true"
-          :toolbox="false"
-          :area-style="true"
-        />
+        <div v-if="monthlyTrendSeries.length > 0" class="trend-chart-wrap">
+          <LineChart
+            chart-id="line-load-trend"
+            :title="'平均负载月度趋势'"
+            :data="[]"
+            :x-axis-data="monthlyXAxis"
+            :series="monthlyTrendSeries"
+            y-axis-name="平均负载"
+            :legend="true"
+            :toolbox="false"
+            :area-style="false"
+            :show-symbol="true"
+            @chart-click="handleMonthlyClick"
+          />
+        </div>
         <div v-else class="empty-state">暂无趋势数据。</div>
+      </div>
+      <div v-if="dailyTrendSeries.length > 0" class="panel-card trend-card">
+        <div class="trend-chart-wrap">
+          <LineChart
+            chart-id="line-load-daily"
+            :title="`日趋势 ${selectedMonth}`"
+            :data="[]"
+            :x-axis-data="dailyXAxis"
+            :series="dailyTrendSeries"
+            y-axis-name="平均负载"
+            :legend="true"
+            :toolbox="false"
+            :area-style="false"
+            :show-symbol="true"
+          />
+        </div>
       </div>
     </div>
 
@@ -225,7 +247,7 @@
           </thead>
           <tbody>
             <tr v-for="segment in sectionSegments" :key="segment.fromStationId + '-' + segment.toStationId">
-              <td>{{ segment.fromStationId }} → {{ segment.toStationId }}</td>
+              <td>{{ formatStationName(segment.fromStationId) }} → {{ formatStationName(segment.toStationId) }}</td>
               <td>{{ segment.avgFullRate.toFixed(2) }}</td>
               <td>{{ segment.p95FullRate.toFixed(2) }}</td>
               <td>{{ segment.peakHour.toString().padStart(2, '0') }}:00</td>
@@ -240,8 +262,8 @@
       <div class="panel-grid">
         <div class="panel-card">
           <div class="panel-header">
-          <h3>车次负载概览</h3>
-          <span class="panel-subtitle">负载最高车次</span>
+            <h3>车次负载概览</h3>
+            <span class="panel-subtitle">负载最高车次</span>
           </div>
           <table class="data-table">
             <thead>
@@ -254,7 +276,7 @@
             </thead>
             <tbody>
               <tr v-for="trip in topTrips" :key="trip.tripId">
-                <td>{{ trip.tripId }}</td>
+                <td>{{ trip.displayId }}</td>
                 <td>{{ trip.departTime }}</td>
                 <td>{{ trip.maxLoad.toFixed(2) }}</td>
                 <td>{{ trip.avgFlow.toFixed(0) }}</td>
@@ -264,8 +286,8 @@
         </div>
         <div class="panel-card">
           <div class="panel-header">
-          <h3>发车需求分布</h3>
-          <span class="panel-subtitle">发车时间与负载</span>
+            <h3>发车需求分布</h3>
+            <span class="panel-subtitle">发车时间与负载</span>
           </div>
           <table class="data-table">
             <thead>
@@ -307,7 +329,7 @@
           </thead>
           <tbody>
             <tr v-for="node in hubNodes" :key="node.stationId">
-              <td>{{ node.name }}</td>
+              <td>{{ formatStationName(node.stationId) }}</td>
               <td>{{ node.degree }}</td>
               <td>{{ node.betweenness.toFixed(2) }}</td>
               <td>{{ node.closeness.toFixed(2) }}</td>
@@ -326,8 +348,8 @@
       <div class="suggestion-list">
         <div v-for="item in suggestionItems" :key="item.id" class="suggestion-item">
           <div class="suggestion-main">
-            <div class="suggestion-title">{{ item.title }}</div>
-            <div class="suggestion-meta">{{ item.reason }}</div>
+            <div class="suggestion-title">{{ formatSuggestionTitle(item) }}</div>
+            <div class="suggestion-meta">{{ formatSuggestionReason(item) }}</div>
           </div>
           <div class="suggestion-stats">
             <span class="pill">{{ suggestionTypeLabel(item.type) }}</span>
@@ -384,6 +406,16 @@ const timetableScatter = ref<TimetableScatter | null>(null)
 const suggestionList = ref<SuggestionList | null>(null)
 const hubMetrics = ref<HubMetrics | null>(null)
 
+const stationNameMap: Record<string, string> = {
+  '810': '遂宁',
+  '1037': '重庆北',
+  '1640': '成都',
+  '1689': '合川',
+  '1690': '潼南',
+  '1694': '大英东',
+  '1695': '成都东'
+}
+
 const selectedHeatCell = ref<{
   line: string
   time: string
@@ -426,26 +458,87 @@ const heatmapGrid = computed(() => {
   })
 })
 
-const lineTrendXAxis = computed(() => {
-  const series = lineTrend.value?.series.find((item) => item.lineId === activeLineId.value)
-  return series ? series.points.map((point) => point.t) : []
-})
+const selectedMonth = ref('')
 
-const lineTrendSeries = computed(() => {
-  const series = lineTrend.value?.series.find((item) => item.lineId === activeLineId.value)
-  if (!series) {
+const monthlyXAxis = computed(() => {
+  if (!lineTrend.value) {
     return []
   }
-  return [
-    {
-      name: '平均负载',
-      data: series.points.map((point) => point.avgLoad)
-    },
-    {
-      name: 'p95 负载',
-      data: series.points.map((point) => point.p95Load)
+  const months = new Set<string>()
+  lineTrend.value.series.forEach((series) => {
+    series.points.forEach((point) => {
+      const monthKey = point.t.slice(0, 7)
+      months.add(monthKey)
+    })
+  })
+  return Array.from(months).sort()
+})
+
+const monthlyTrendSeries = computed(() => {
+  if (!lineTrend.value) {
+    return []
+  }
+  const months = monthlyXAxis.value
+  if (months.length === 0) {
+    return []
+  }
+  return lineTrend.value.series.map((series) => {
+    const monthMap: Record<string, { sum: number; count: number }> = {}
+    series.points.forEach((point) => {
+      const monthKey = point.t.slice(0, 7)
+      if (!monthMap[monthKey]) {
+        monthMap[monthKey] = { sum: 0, count: 0 }
+      }
+      monthMap[monthKey].sum += point.avgLoad
+      monthMap[monthKey].count += 1
+    })
+    const data = months.map((month) => {
+      const bucket = monthMap[month]
+      return bucket ? bucket.sum / bucket.count : null
+    })
+    const lineName = lines.value.find((line) => line.id === series.lineId)?.name || `Line ${series.lineId}`
+    return {
+      name: lineName,
+      data
     }
-  ]
+  })
+})
+
+const dailyXAxis = computed(() => {
+  if (!selectedMonth.value) {
+    return []
+  }
+  const [yearStr, monthStr] = selectedMonth.value.split('-')
+  const year = Number(yearStr)
+  const month = Number(monthStr)
+  if (!year || !month) {
+    return []
+  }
+  const daysInMonth = new Date(year, month, 0).getDate()
+  return Array.from({ length: daysInMonth }, (_, index) => String(index + 1).padStart(2, '0'))
+})
+
+const dailyTrendSeries = computed(() => {
+  if (!lineTrend.value || !selectedMonth.value) {
+    return []
+  }
+  const days = dailyXAxis.value
+  if (days.length === 0) {
+    return []
+  }
+  return lineTrend.value.series.map((series) => {
+    const dayMap: Record<string, number> = {}
+    series.points.forEach((point) => {
+      if (point.t.startsWith(selectedMonth.value)) {
+        dayMap[point.t.slice(8)] = point.avgLoad
+      }
+    })
+    const lineName = lines.value.find((line) => line.id === series.lineId)?.name || `Line ${series.lineId}`
+    return {
+      name: lineName,
+      data: days.map((day) => (dayMap[day] !== undefined ? dayMap[day] : null))
+    }
+  })
 })
 
 const sectionSegments = computed(() => {
@@ -456,19 +549,29 @@ const timetablePoints = computed(() => {
   return (timetableScatter.value?.points || []).slice(0, 12)
 })
 
+
 const topTrips = computed(() => {
   if (!tripHeatmap.value) {
     return []
   }
-  const tripStats = new Map<string, { tripId: string; departTime: string; maxLoad: number; avgFlow: number; count: number }>()
+  const tripStats = new Map<string, {
+    tripId: string
+    displayId: string
+    departTime: string
+    maxLoad: number
+    avgFlow: number
+    count: number
+  }>()
   tripHeatmap.value.cells.forEach((cell) => {
     const trip = tripHeatmap.value?.trips.find((item) => item.tripId === cell.tripId)
     if (!trip) {
       return
     }
+    const displayId = `L${trip.lineId || activeLineId.value}/${trip.trainId || 'T'}/${trip.departTime}`
     if (!tripStats.has(cell.tripId)) {
       tripStats.set(cell.tripId, {
         tripId: cell.tripId,
+        displayId,
         departTime: trip.departTime,
         maxLoad: cell.load,
         avgFlow: cell.flow,
@@ -502,12 +605,51 @@ const suggestionTypeLabel = (type: string) => {
   return type
 }
 
+const formatStationName = (stationId: string) => {
+  return stationNameMap[String(stationId)] || `站点${stationId}`
+}
+
+const formatSuggestionTitle = (item: { title: string; type: string; segment?: { fromStationId: string; toStationId: string } | null }) => {
+  if (item.segment) {
+    return `线路优化：${formatStationName(item.segment.fromStationId)} → ${formatStationName(item.segment.toStationId)}`
+  }
+  if (item.type === 'hub') {
+    const stationMatch = item.title.match(/Station\s*(\d+)/i)
+    if (stationMatch) {
+      return `枢纽强化：${formatStationName(stationMatch[1])}`
+    }
+    return '枢纽强化'
+  }
+  if (item.type === 'timetable') {
+    return '时刻表调整'
+  }
+  if (item.type === 'addTrips') {
+    return '加开班次建议'
+  }
+  return item.title
+}
+
+const formatSuggestionReason = (item: { reason: string; type: string }) => {
+  if (item.type === 'hub') {
+    return '换乘压力较高'
+  }
+  if (item.reason) {
+    return item.reason.replace('p95 load', 'p95 负载').replace('avg load', '平均负载').replace('over', '超过').replace('below', '低于')
+  }
+  return '建议优化'
+}
+
 const toggleLine = (lineId: string) => {
   if (filters.lineIds.includes(lineId)) {
     filters.lineIds = filters.lineIds.filter((id) => id !== lineId)
   } else {
     filters.lineIds = [lineId]
   }
+  const activeLine = lines.value.find((line) => line.id === lineId)
+  if (activeLine?.dateRange?.minDate && activeLine?.dateRange?.maxDate) {
+    filters.timeRange = [activeLine.dateRange.minDate, activeLine.dateRange.maxDate]
+  }
+  refreshAll()
 }
 
 const selectHeatCell = (lineLabel: string, cell: { time: string; avgLoad: number; p95Load: number; overMinutes: number }) => {
@@ -518,6 +660,13 @@ const selectHeatCell = (lineLabel: string, cell: { time: string; avgLoad: number
     p95Load: cell.p95Load,
     overMinutes: cell.overMinutes
   }
+}
+
+const handleMonthlyClick = (params: { name?: string }) => {
+  if (!params?.name) {
+    return
+  }
+  selectedMonth.value = params.name
 }
 
 const heatColor = (value: number) => {
@@ -539,6 +688,23 @@ const refreshAll = async () => {
     const lineIdPayload = activeLineId.value ? { ...filters, lineId: activeLineId.value } : filterPayload
 
     errorMessage.value = ''
+    const trendLineIds = lines.value.map((line) => line.id)
+    const trendDates = lines.value
+      .map((line) => line.dateRange)
+      .filter((range): range is { minDate: string; maxDate: string } => !!range?.minDate && !!range?.maxDate)
+    const trendMin = trendDates.length > 0
+      ? trendDates.reduce((min, range) => (range.minDate < min ? range.minDate : min), trendDates[0].minDate)
+      : filterPayload.timeRange[0]
+    const trendMax = trendDates.length > 0
+      ? trendDates.reduce((max, range) => (range.maxDate > max ? range.maxDate : max), trendDates[0].maxDate)
+      : filterPayload.timeRange[1]
+    const trendFilters = {
+      ...filterPayload,
+      timeRange: [trendMin, trendMax],
+      lineIds: trendLineIds,
+      direction: 'all',
+      dayType: 'all'
+    }
     const [
       kpiRes,
       heatRes,
@@ -551,7 +717,7 @@ const refreshAll = async () => {
     ] = await Promise.all([
       dataService.getRouteOptKpi(filterPayload),
       dataService.getLineLoadHeatmap(filterPayload),
-      dataService.getLineLoadTrend(filterPayload),
+      dataService.getLineLoadTrend(trendFilters),
       dataService.getSectionCorridor(lineIdPayload),
       dataService.getTripHeatmap(lineIdPayload),
       dataService.getTimetableScatter(lineIdPayload),
@@ -562,6 +728,9 @@ const refreshAll = async () => {
     kpi.value = kpiRes
     lineHeatmap.value = heatRes
     lineTrend.value = trendRes
+    if (!selectedMonth.value && monthlyXAxis.value.length > 0) {
+      selectedMonth.value = monthlyXAxis.value[0]
+    }
     sectionCorridor.value = sectionRes
     tripHeatmap.value = tripRes
     timetableScatter.value = timetableRes
@@ -580,6 +749,10 @@ const loadLines = async () => {
   lines.value = result
   if (lines.value.length > 0 && filters.lineIds.length === 0) {
     filters.lineIds = [lines.value[0].id]
+    const defaultLine = lines.value[0]
+    if (defaultLine.dateRange?.minDate && defaultLine.dateRange?.maxDate) {
+      filters.timeRange = [defaultLine.dateRange.minDate, defaultLine.dateRange.maxDate]
+    }
   }
 }
 
@@ -795,12 +968,6 @@ onMounted(async () => {
   margin-bottom: var(--spacing-6);
 }
 
-.panel-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: var(--spacing-4);
-}
-
 .panel-card {
   background: var(--color-bg-card);
   border-radius: var(--border-radius-xl);
@@ -822,49 +989,67 @@ onMounted(async () => {
   margin-top: var(--spacing-4);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2);
+  gap: var(--spacing-3);
+  overflow-x: auto;
+  padding-bottom: var(--spacing-2);
 }
 
-.heatmap-header,
 .heatmap-row {
-  display: grid;
-  grid-template-columns: 140px repeat(auto-fit, minmax(60px, 1fr));
-  gap: var(--spacing-2);
+  display: flex;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
-.heatmap-label {
-  font-size: var(--font-size-xs);
+.heatmap-line-label {
+  min-width: 120px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  text-align: center;
+  white-space: nowrap;
 }
 
-.heatmap-label.y-label {
-  text-align: left;
+.heatmap-cells {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.heatmap-cell-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 72px;
+}
+
+.heatmap-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 
 .heatmap-cell {
   height: 40px;
+  width: 72px;
   border-radius: var(--border-radius-sm);
   border: none;
   color: #fff;
   font-size: var(--font-size-xs);
 }
 
-.heatmap-spacer {
-  height: 1px;
+.selection-panel {
+  margin-top: var(--spacing-4);
 }
 
-.side-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
+.panel-header.compact {
+  margin-bottom: var(--spacing-2);
 }
 
 .selection-card {
   background: var(--color-bg-secondary);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-3);
+  width: 100%;
+  max-width: none;
 }
 
 .selection-title {
@@ -877,10 +1062,25 @@ onMounted(async () => {
   justify-content: space-between;
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-1);
+  gap: var(--spacing-3);
+}
+
+.selection-row span {
+  min-width: 72px;
+  color: var(--color-text-secondary);
+}
+
+.selection-row strong {
+  text-align: right;
+  flex: 1;
 }
 
 .trend-card {
   min-height: 320px;
+}
+
+.trend-chart-wrap {
+  height: 360px;
 }
 
 .data-table {
@@ -952,8 +1152,8 @@ onMounted(async () => {
 }
 
 @media (max-width: 960px) {
-  .panel-grid {
-    grid-template-columns: 1fr;
+  .heatmap-row {
+    align-items: flex-start;
   }
 }
 </style>

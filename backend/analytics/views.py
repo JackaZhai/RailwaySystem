@@ -420,7 +420,9 @@ def _build_trip_heatmap(summary: pd.DataFrame, segments: pd.DataFrame, filters: 
 
     trips = [
         {
-            "tripId": f"{row['train_id']}-{row['trip_key']}",
+            "tripId": f"{row['line_id']}-{row['train_id']}-{row['trip_key']}",
+            "lineId": str(row["line_id"]),
+            "trainId": str(row["train_id"]),
             "departTime": row["trip_key"][:2] + ":" + row["trip_key"][2:],
         }
         for _, row in trip_order.iterrows()
@@ -438,7 +440,7 @@ def _build_trip_heatmap(summary: pd.DataFrame, segments: pd.DataFrame, filters: 
             continue
         cells.append(
             {
-                "tripId": f"{row['train_id']}-{row['trip_key']}",
+                "tripId": f"{row['line_id']}-{row['train_id']}-{row['trip_key']}",
                 "segIndex": int(segment_index[key]),
                 "load": float(row["full_rate"]),
                 "flow": float(row["segment_load"]),
