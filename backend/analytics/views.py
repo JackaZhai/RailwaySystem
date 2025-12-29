@@ -212,11 +212,18 @@ def _build_line_list(summary: pd.DataFrame) -> List[Dict[str, Any]]:
         directions = sorted({direction for direction in group["direction"].dropna().unique()})
         if not directions:
             directions = ["up"]
+        date_values = group["date"].dropna()
+        min_date = date_values.min() if not date_values.empty else None
+        max_date = date_values.max() if not date_values.empty else None
         lines.append(
             {
                 "id": str(line_id),
                 "name": f"Line {line_id}",
                 "directions": directions,
+                "dateRange": {
+                    "minDate": min_date.strftime("%Y-%m-%d") if min_date else None,
+                    "maxDate": max_date.strftime("%Y-%m-%d") if max_date else None,
+                },
             }
         )
     return sorted(lines, key=lambda item: item["id"])
@@ -450,8 +457,10 @@ def _build_timetable_scatter(summary: pd.DataFrame) -> Dict[str, Any]:
         p95_load=("p95_load", _p95),
         sample_trips=("trip_key", "count"),
     )
+    grouped = grouped.fillna(0)
     points = []
-    for trip_key, row in grouped.reset_index().iterrows():
+    for _, row in grouped.reset_index().iterrows():
+        trip_key = str(row["trip_key"]).zfill(4)
         points.append(
             {
                 "departTime": trip_key[:2] + ":" + trip_key[2:],

@@ -2,7 +2,10 @@ import axios from 'axios'
 
 // API基础配置
 // 使用相对路径，让Vite代理处理
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+const API_BASE_URL = rawBaseUrl.startsWith('http')
+  ? (rawBaseUrl.endsWith('/api') ? rawBaseUrl : `${rawBaseUrl.replace(/\/$/, '')}/api`)
+  : rawBaseUrl
 
 // 创建axios实例
 const api = axios.create({

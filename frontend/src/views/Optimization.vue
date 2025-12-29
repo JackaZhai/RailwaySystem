@@ -1,15 +1,15 @@
 <template>
   <div class="optimization animate-fade-in">
-    <LoadingSpinner v-if="isLoading" size="large" variant="primary" text="Loading route optimization..." fullscreen />
+    <LoadingSpinner v-if="isLoading" size="large" variant="primary" text="线路优化数据加载中..." fullscreen />
 
     <div class="page-header">
       <div class="header-content">
-        <h1 class="page-title">Route Optimization</h1>
-        <p class="page-description">Line load analysis, section diagnostics, and optimization suggestions.</p>
+        <h1 class="page-title">线路优化</h1>
+        <p class="page-description">线路负载分析、断面诊断与优化建议。</p>
       </div>
       <div class="header-actions">
         <button class="btn btn-outline" :disabled="isLoading" @click="refreshAll">
-          Refresh Data
+          刷新数据
         </button>
       </div>
     </div>
@@ -17,41 +17,41 @@
     <div class="filters-card">
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">Date range</label>
+          <label class="filter-label">日期范围</label>
           <div class="range-inputs">
             <input v-model="filters.timeRange[0]" type="date" class="input" />
-            <span class="range-separator">to</span>
+            <span class="range-separator">至</span>
             <input v-model="filters.timeRange[1]" type="date" class="input" />
           </div>
         </div>
         <div class="filter-group">
-          <label class="filter-label">Day type</label>
+          <label class="filter-label">日期类型</label>
           <select v-model="filters.dayType" class="input">
-            <option value="workday">Workday</option>
-            <option value="weekend">Weekend</option>
-            <option value="all">All</option>
+            <option value="workday">工作日</option>
+            <option value="weekend">周末</option>
+            <option value="all">全部</option>
           </select>
         </div>
         <div class="filter-group">
-          <label class="filter-label">Direction</label>
+          <label class="filter-label">方向</label>
           <select v-model="filters.direction" class="input">
-            <option value="up">Up</option>
-            <option value="down">Down</option>
-            <option value="all">All</option>
+            <option value="up">上行</option>
+            <option value="down">下行</option>
+            <option value="all">全部</option>
           </select>
         </div>
         <div class="filter-group">
-          <label class="filter-label">Granularity</label>
+          <label class="filter-label">粒度</label>
           <select v-model="filters.granularity" class="input">
-            <option value="15min">15 min</option>
-            <option value="hour">Hour</option>
-            <option value="day">Day</option>
+            <option value="15min">15 分钟</option>
+            <option value="hour">小时</option>
+            <option value="day">天</option>
           </select>
         </div>
       </div>
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">Lines</label>
+          <label class="filter-label">线路</label>
           <div class="chip-group">
             <button
               v-for="line in lines"
@@ -65,14 +65,14 @@
           </div>
         </div>
         <div class="filter-group threshold-group">
-          <label class="filter-label">Thresholds</label>
+          <label class="filter-label">阈值</label>
           <div class="threshold-inputs">
             <div class="threshold-item">
-              <span class="threshold-label">Overload</span>
+              <span class="threshold-label">过载</span>
               <input v-model.number="filters.threshold.overload" class="input small" type="number" step="0.05" />
             </div>
             <div class="threshold-item">
-              <span class="threshold-label">Idle</span>
+              <span class="threshold-label">闲置</span>
               <input v-model.number="filters.threshold.idle" class="input small" type="number" step="0.05" />
             </div>
           </div>
@@ -80,65 +80,66 @@
         <div class="filter-group">
           <label class="filter-label">&nbsp;</label>
           <button class="btn btn-primary" :disabled="isLoading" @click="refreshAll">
-            Apply Filters
+            应用筛选
           </button>
         </div>
       </div>
     </div>
+    <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-title">Overload Lines</div>
+        <div class="kpi-title">过载线路</div>
         <div class="kpi-value">{{ kpi?.overloadLineCount ?? 0 }}</div>
-        <div class="kpi-footnote">p95 load &gt; {{ filters.threshold.overload.toFixed(2) }}</div>
+        <div class="kpi-footnote">p95 负载 &gt; {{ filters.threshold.overload.toFixed(2) }}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Idle Lines</div>
+        <div class="kpi-title">闲置线路</div>
         <div class="kpi-value">{{ kpi?.idleLineCount ?? 0 }}</div>
-        <div class="kpi-footnote">avg load &lt; {{ filters.threshold.idle.toFixed(2) }}</div>
+        <div class="kpi-footnote">平均负载 &lt; {{ filters.threshold.idle.toFixed(2) }}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Top Section</div>
+        <div class="kpi-title">最拥挤区间</div>
         <div class="kpi-value">
           <span v-if="kpi?.topSection">{{ kpi.topSection.fromStationId }} → {{ kpi.topSection.toStationId }}</span>
           <span v-else>-</span>
         </div>
         <div class="kpi-footnote">
-          p95 {{ kpi?.topSection ? kpi.topSection.p95FullRate.toFixed(2) : 'n/a' }}
+          p95 {{ kpi?.topSection ? kpi.topSection.p95FullRate.toFixed(2) : '无' }}
         </div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Peak Hours</div>
+        <div class="kpi-title">高峰时段</div>
         <div class="kpi-value">
           <span v-if="kpi?.peakHours?.length">{{ kpi.peakHours[0].hour.toString().padStart(2, '0') }}:00</span>
           <span v-else>-</span>
         </div>
         <div class="kpi-footnote">
-          {{ kpi?.peakHours?.[0] ? kpi.peakHours[0].value.toFixed(2) : 'n/a' }}
+          {{ kpi?.peakHours?.[0] ? kpi.peakHours[0].value.toFixed(2) : '无' }}
         </div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-title">Suggestions</div>
+        <div class="kpi-title">优化建议</div>
         <div class="kpi-value">{{ suggestionList?.total ?? 0 }}</div>
         <div class="kpi-footnote">
-          Add {{ kpi?.suggestionCount?.addTrips ?? 0 }} · Timetable {{ kpi?.suggestionCount?.timetable ?? 0 }} · Hub {{ kpi?.suggestionCount?.hub ?? 0 }}
+          加开 {{ kpi?.suggestionCount?.addTrips ?? 0 }} · 时刻表 {{ kpi?.suggestionCount?.timetable ?? 0 }} · 枢纽 {{ kpi?.suggestionCount?.hub ?? 0 }}
         </div>
       </div>
     </div>
 
     <div class="tab-bar">
-      <button class="tab-btn" :class="{ active: activeTab === 'line' }" @click="activeTab = 'line'">Line Load</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'section' }" @click="activeTab = 'section'">Section Analysis</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'trip' }" @click="activeTab = 'trip'">Trip Analysis</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'hub' }" @click="activeTab = 'hub'">Hub Metrics</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'line' }" @click="activeTab = 'line'">线路负载</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'section' }" @click="activeTab = 'section'">断面分析</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'trip' }" @click="activeTab = 'trip'">车次分析</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'hub' }" @click="activeTab = 'hub'">枢纽识别</button>
     </div>
 
     <div v-if="activeTab === 'line'" class="tab-panel">
       <div class="panel-grid">
         <div class="panel-card">
           <div class="panel-header">
-            <h3>Line Load Heatmap</h3>
-            <span class="panel-subtitle">Avg and p95 load by hour</span>
+            <h3>线路负载热力</h3>
+            <span class="panel-subtitle">按小时的平均与 p95 负载</span>
           </div>
           <div class="heatmap">
             <div class="heatmap-header">
@@ -165,59 +166,61 @@
         </div>
         <div class="panel-card side-panel">
           <div class="panel-header">
-            <h3>Selection</h3>
-            <span class="panel-subtitle">Click a cell to inspect load</span>
+            <h3>选中详情</h3>
+            <span class="panel-subtitle">点击热力格查看负载</span>
           </div>
           <div class="selection-card" v-if="selectedHeatCell">
             <div class="selection-title">{{ selectedHeatCell.line }}</div>
             <div class="selection-row">
-              <span>Time</span>
+              <span>时间</span>
               <strong>{{ selectedHeatCell.time }}</strong>
             </div>
             <div class="selection-row">
-              <span>Avg load</span>
+              <span>平均负载</span>
               <strong>{{ selectedHeatCell.avgLoad.toFixed(2) }}</strong>
             </div>
             <div class="selection-row">
-              <span>p95 load</span>
+              <span>p95 负载</span>
               <strong>{{ selectedHeatCell.p95Load.toFixed(2) }}</strong>
             </div>
             <div class="selection-row">
-              <span>Over minutes</span>
+              <span>超载分钟</span>
               <strong>{{ selectedHeatCell.overMinutes }}</strong>
             </div>
           </div>
-          <div v-else class="empty-state">Select a heatmap cell to see details.</div>
+          <div v-else class="empty-state">请选择热力格查看详情。</div>
         </div>
       </div>
       <div class="panel-card trend-card">
         <LineChart
+          v-if="lineTrendSeries.length > 0"
           chart-id="line-load-trend"
-          :title="'Line Load Trend'"
+          :title="'线路负载趋势'"
           :x-axis-data="lineTrendXAxis"
           :series="lineTrendSeries"
-          y-axis-name="Load"
+          y-axis-name="负载"
           :legend="true"
           :toolbox="false"
           :area-style="true"
         />
+        <div v-else class="empty-state">暂无趋势数据。</div>
       </div>
     </div>
 
     <div v-if="activeTab === 'section'" class="tab-panel">
       <div class="panel-card">
         <div class="panel-header">
-          <h3>Section Load Corridor</h3>
-          <span class="panel-subtitle">Top congestion segments</span>
+          <h3>断面负载走廊</h3>
+          <span class="panel-subtitle">拥挤区间排名</span>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>Segment</th>
-              <th>Avg Load</th>
-              <th>p95 Load</th>
-              <th>Peak Hour</th>
-              <th>Flow</th>
+              <th>区间</th>
+              <th>平均负载</th>
+              <th>p95 负载</th>
+              <th>高峰时段</th>
+              <th>客流</th>
             </tr>
           </thead>
           <tbody>
@@ -237,16 +240,16 @@
       <div class="panel-grid">
         <div class="panel-card">
           <div class="panel-header">
-            <h3>Trip Load Overview</h3>
-            <span class="panel-subtitle">Highest loaded trips</span>
+          <h3>车次负载概览</h3>
+          <span class="panel-subtitle">负载最高车次</span>
           </div>
           <table class="data-table">
             <thead>
               <tr>
-                <th>Trip</th>
-                <th>Departure</th>
-                <th>Max Load</th>
-                <th>Avg Flow</th>
+                <th>车次</th>
+                <th>发车时间</th>
+                <th>最大负载</th>
+                <th>平均客流</th>
               </tr>
             </thead>
             <tbody>
@@ -261,16 +264,16 @@
         </div>
         <div class="panel-card">
           <div class="panel-header">
-            <h3>Timetable Demand</h3>
-            <span class="panel-subtitle">Departure time vs load</span>
+          <h3>发车需求分布</h3>
+          <span class="panel-subtitle">发车时间与负载</span>
           </div>
           <table class="data-table">
             <thead>
               <tr>
-                <th>Departure</th>
-                <th>Avg Load</th>
-                <th>p95 Load</th>
-                <th>Samples</th>
+                <th>发车时间</th>
+                <th>平均负载</th>
+                <th>p95 负载</th>
+                <th>样本数</th>
               </tr>
             </thead>
             <tbody>
@@ -289,17 +292,17 @@
     <div v-if="activeTab === 'hub'" class="tab-panel">
       <div class="panel-card">
         <div class="panel-header">
-          <h3>Hub Metrics</h3>
-          <span class="panel-subtitle">Top stations by connectivity</span>
+          <h3>枢纽指标</h3>
+          <span class="panel-subtitle">站点连接度排名</span>
         </div>
         <table class="data-table">
           <thead>
             <tr>
-              <th>Station</th>
-              <th>Degree</th>
-              <th>Betweenness</th>
-              <th>Closeness</th>
-              <th>In/Out Flow</th>
+              <th>站点</th>
+              <th>度数</th>
+              <th>介数</th>
+              <th>接近度</th>
+              <th>进出流量</th>
             </tr>
           </thead>
           <tbody>
@@ -317,8 +320,8 @@
 
     <div class="panel-card suggestion-card">
       <div class="panel-header">
-        <h3>Optimization Suggestions</h3>
-        <span class="panel-subtitle">Prioritized actions</span>
+        <h3>优化建议</h3>
+        <span class="panel-subtitle">优先级建议清单</span>
       </div>
       <div class="suggestion-list">
         <div v-for="item in suggestionItems" :key="item.id" class="suggestion-item">
@@ -327,11 +330,11 @@
             <div class="suggestion-meta">{{ item.reason }}</div>
           </div>
           <div class="suggestion-stats">
-            <span class="pill">{{ item.type }}</span>
+            <span class="pill">{{ suggestionTypeLabel(item.type) }}</span>
             <span class="pill">p95 {{ item.impact.p95Before.toFixed(2) }} → {{ item.impact.p95After.toFixed(2) }}</span>
           </div>
         </div>
-        <div v-if="suggestionItems.length === 0" class="empty-state">No suggestions for current filters.</div>
+        <div v-if="suggestionItems.length === 0" class="empty-state">当前筛选无建议。</div>
       </div>
     </div>
   </div>
@@ -356,6 +359,7 @@ import type {
 } from '@/types/optimization'
 
 const isLoading = ref(false)
+const errorMessage = ref('')
 const activeTab = ref<'line' | 'section' | 'trip' | 'hub'>('line')
 
 const filters = reactive<RouteOptFilters>({
@@ -434,11 +438,11 @@ const lineTrendSeries = computed(() => {
   }
   return [
     {
-      name: 'Avg Load',
+      name: '平均负载',
       data: series.points.map((point) => point.avgLoad)
     },
     {
-      name: 'p95 Load',
+      name: 'p95 负载',
       data: series.points.map((point) => point.p95Load)
     }
   ]
@@ -491,6 +495,13 @@ const suggestionItems = computed(() => {
   return suggestionList.value?.items || []
 })
 
+const suggestionTypeLabel = (type: string) => {
+  if (type === 'addTrips') return '加开'
+  if (type === 'timetable') return '时刻表'
+  if (type === 'hub') return '枢纽'
+  return type
+}
+
 const toggleLine = (lineId: string) => {
   if (filters.lineIds.includes(lineId)) {
     filters.lineIds = filters.lineIds.filter((id) => id !== lineId)
@@ -527,6 +538,7 @@ const refreshAll = async () => {
     const filterPayload = { ...filters }
     const lineIdPayload = activeLineId.value ? { ...filters, lineId: activeLineId.value } : filterPayload
 
+    errorMessage.value = ''
     const [
       kpiRes,
       heatRes,
@@ -555,6 +567,9 @@ const refreshAll = async () => {
     timetableScatter.value = timetableRes
     suggestionList.value = suggestionRes
     hubMetrics.value = hubRes
+  } catch (error) {
+    console.error('线路优化数据加载失败:', error)
+    errorMessage.value = '数据加载失败，请稍后重试或检查后端服务。'
   } finally {
     isLoading.value = false
   }
@@ -606,6 +621,16 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
+}
+
+.error-banner {
+  background: rgba(220, 20, 60, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(220, 20, 60, 0.2);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-3);
+  margin-bottom: var(--spacing-6);
+  font-size: var(--font-size-sm);
 }
 
 .filter-row {
