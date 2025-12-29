@@ -1,0 +1,382 @@
+{
+  "target_stations": [
+    810,
+    1037,
+    1640,
+    1689,
+    1690,
+    1694,
+    1695
+  ],
+  "station_distribution": {
+    "810": [
+      {
+        "operator": "运营商编码",
+        "line": 39,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ],
+    "1037": [
+      {
+        "operator": "运营商编码",
+        "line": 39,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 68,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ],
+    "1640": [
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ],
+    "1689": [
+      {
+        "operator": "运营商编码",
+        "line": 39,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ],
+    "1690": [
+      {
+        "operator": "运营商编码",
+        "line": 39,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ],
+    "1694": [
+      {
+        "operator": "运营商编码",
+        "line": 39,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ],
+    "1695": [
+      {
+        "operator": "运营商编码",
+        "line": 39,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 68,
+        "station_name": "站点名称"
+      },
+      {
+        "operator": "运营商编码",
+        "line": 89,
+        "station_name": "站点名称"
+      }
+    ]
+  },
+  "aggregated_by_operator": {
+    "运营商编码": {
+      "total_lines": 1,
+      "lines": {
+        "89": {
+          "station_count": 44,
+          "total_distance": 1726.0,
+          "target_sequences": [
+            {
+              "start_id": 1640,
+              "start_name": "站点名称",
+              "end_id": 1690,
+              "end_name": "站点名称",
+              "sequence_stations": [
+                {
+                  "id": 1640,
+                  "name": "站点名称",
+                  "distance": 10.0
+                },
+                {
+                  "id": 1689,
+                  "name": "站点名称",
+                  "distance": 28.0
+                },
+                {
+                  "id": 1690,
+                  "name": "站点名称",
+                  "distance": 49.0
+                }
+              ],
+              "sequence_distance": 38.0,
+              "station_count": 3
+            },
+            {
+              "start_id": 1694,
+              "start_name": "站点名称",
+              "end_id": 1695,
+              "end_name": "站点名称",
+              "sequence_stations": [
+                {
+                  "id": 1694,
+                  "name": "站点名称",
+                  "distance": 27.0
+                },
+                {
+                  "id": 1695,
+                  "name": "站点名称",
+                  "distance": 17.0
+                }
+              ],
+              "sequence_distance": 27.0,
+              "station_count": 2
+            }
+          ],
+          "all_stations": [
+            {
+              "station_id": 418,
+              "station_name": "站点名称",
+              "distance": 0.0
+            },
+            {
+              "station_id": 437,
+              "station_name": "站点名称",
+              "distance": 27.0
+            },
+            {
+              "station_id": 757,
+              "station_name": "站点名称",
+              "distance": 6.0
+            },
+            {
+              "station_id": 810,
+              "station_name": "站点名称",
+              "distance": 9.0
+            },
+            {
+              "station_id": 823,
+              "station_name": "站点名称",
+              "distance": 19.0
+            },
+            {
+              "station_id": 824,
+              "station_name": "站点名称",
+              "distance": 8.0
+            },
+            {
+              "station_id": 831,
+              "station_name": "站点名称",
+              "distance": 13.0
+            },
+            {
+              "station_id": 832,
+              "station_name": "站点名称",
+              "distance": 82.0
+            },
+            {
+              "station_id": 833,
+              "station_name": "站点名称",
+              "distance": 49.0
+            },
+            {
+              "station_id": 834,
+              "station_name": "站点名称",
+              "distance": 42.0
+            },
+            {
+              "station_id": 835,
+              "station_name": "站点名称",
+              "distance": 24.0
+            },
+            {
+              "station_id": 836,
+              "station_name": "站点名称",
+              "distance": 40.0
+            },
+            {
+              "station_id": 837,
+              "station_name": "站点名称",
+              "distance": 6.0
+            },
+            {
+              "station_id": 1037,
+              "station_name": "站点名称",
+              "distance": 22.0
+            },
+            {
+              "station_id": 1269,
+              "station_name": "站点名称",
+              "distance": 5.0
+            },
+            {
+              "station_id": 1596,
+              "station_name": "站点名称",
+              "distance": 44.0
+            },
+            {
+              "station_id": 1598,
+              "station_name": "站点名称",
+              "distance": 44.0
+            },
+            {
+              "station_id": 1599,
+              "station_name": "站点名称",
+              "distance": 70.0
+            },
+            {
+              "station_id": 1600,
+              "station_name": "站点名称",
+              "distance": 20.0
+            },
+            {
+              "station_id": 1601,
+              "station_name": "站点名称",
+              "distance": 31.0
+            },
+            {
+              "station_id": 1602,
+              "station_name": "站点名称",
+              "distance": 37.0
+            },
+            {
+              "station_id": 1603,
+              "station_name": "站点名称",
+              "distance": 40.0
+            },
+            {
+              "station_id": 1604,
+              "station_name": "站点名称",
+              "distance": 62.0
+            },
+            {
+              "station_id": 1605,
+              "station_name": "站点名称",
+              "distance": 51.0
+            },
+            {
+              "station_id": 1606,
+              "station_name": "站点名称",
+              "distance": 66.0
+            },
+            {
+              "station_id": 1607,
+              "station_name": "站点名称",
+              "distance": 35.0
+            },
+            {
+              "station_id": 1608,
+              "station_name": "站点名称",
+              "distance": 61.0
+            },
+            {
+              "station_id": 1640,
+              "station_name": "站点名称",
+              "distance": 10.0
+            },
+            {
+              "station_id": 1689,
+              "station_name": "站点名称",
+              "distance": 28.0
+            },
+            {
+              "station_id": 1690,
+              "station_name": "站点名称",
+              "distance": 49.0
+            },
+            {
+              "station_id": 1691,
+              "station_name": "站点名称",
+              "distance": 43.0
+            },
+            {
+              "station_id": 1694,
+              "station_name": "站点名称",
+              "distance": 27.0
+            },
+            {
+              "station_id": 1695,
+              "station_name": "站点名称",
+              "distance": 17.0
+            },
+            {
+              "station_id": 1696,
+              "station_name": "站点名称",
+              "distance": 9.0
+            },
+            {
+              "station_id": 1697,
+              "station_name": "站点名称",
+              "distance": 102.0
+            },
+            {
+              "station_id": 2561,
+              "station_name": "站点名称",
+              "distance": 10.0
+            },
+            {
+              "station_id": 2562,
+              "station_name": "站点名称",
+              "distance": 85.0
+            },
+            {
+              "station_id": 2563,
+              "station_name": "站点名称",
+              "distance": 64.0
+            },
+            {
+              "station_id": 2564,
+              "station_name": "站点名称",
+              "distance": 64.0
+            },
+            {
+              "station_id": 2565,
+              "station_name": "站点名称",
+              "distance": 68.0
+            },
+            {
+              "station_id": 2566,
+              "station_name": "站点名称",
+              "distance": 50.0
+            },
+            {
+              "station_id": 2567,
+              "station_name": "站点名称",
+              "distance": 73.0
+            },
+            {
+              "station_id": 2568,
+              "station_name": "站点名称",
+              "distance": 103.0
+            },
+            {
+              "station_id": 3290,
+              "station_name": "站点名称",
+              "distance": 11.0
+            }
+          ]
+        }
+      }
+    }
+  }
+}
