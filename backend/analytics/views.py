@@ -56,6 +56,13 @@ def _normalize_direction(value: Any) -> str:
     return "up"
 
 
+def _p95(values: Iterable[float]) -> float:
+    series = pd.Series(list(values)).dropna()
+    if series.empty:
+        return 0.0
+    return float(np.percentile(series, 95))
+
+
 @lru_cache(maxsize=1)
 def load_summary() -> pd.DataFrame:
     df = pd.read_csv(SUMMARY_FILE)
@@ -246,14 +253,14 @@ def _build_kpi(summary: pd.DataFrame, segments: pd.DataFrame, filters: Dict[str,
 
     line_stats = summary.groupby("line_id").agg(
         avg_load=("avg_load", "mean"),
-        p95_load=("p95_load", lambda values: float(np.percentile(values.dropna(), 95))) if len(summary) else 0,
+        p95_load=("p95_load", _p95),
     )
 
     overload_line_count = int((line_stats["p95_load"] > overload_threshold).sum())
     idle_line_count = int((line_stats["avg_load"] < idle_threshold).sum())
 
     segment_stats = segments.groupby(["line_id", "from_station_id", "to_station_id"]).agg(
-        p95_full_rate=("full_rate", lambda values: float(np.percentile(values.dropna(), 95))) if len(segments) else 0,
+        p95_full_rate=("full_rate", _p95),
         avg_full_rate=("full_rate", "mean"),
     )
     top_section = None
@@ -296,7 +303,7 @@ def _build_line_heatmap(summary: pd.DataFrame, filters: Dict[str, Any]) -> Dict[
 
     grouped = summary.groupby(["line_id", "hour"]).agg(
         avg_load=("avg_load", "mean"),
-        p95_load=("p95_load", lambda values: float(np.percentile(values.dropna(), 95))),
+        p95_load=("p95_load", _p95),
         overload_count=("p95_load", lambda values: int((values > overload_threshold).sum())),
     )
 
@@ -331,7 +338,7 @@ def _build_line_trend(summary: pd.DataFrame) -> Dict[str, Any]:
     summary = summary.dropna(subset=["avg_load", "p95_load"])
     grouped = summary.groupby(["line_id", "date"]).agg(
         avg_load=("avg_load", "mean"),
-        p95_load=("p95_load", lambda values: float(np.percentile(values.dropna(), 95))),
+        p95_load=("p95_load", _p95),
     )
     series = []
     for line_id, line_group in grouped.groupby(level=0):
@@ -357,13 +364,13 @@ def _build_section_corridor(summary: pd.DataFrame, segments: pd.DataFrame, filte
 
     grouped = merged.groupby(["from_station_id", "to_station_id"]).agg(
         avg_full_rate=("full_rate", "mean"),
-        p95_full_rate=("full_rate", lambda values: float(np.percentile(values.dropna(), 95))),
+        p95_full_rate=("full_rate", _p95),
         flow=("segment_load", "mean"),
-        peak_hour=("hour", lambda values: int(pd.Series(values).mode().iloc[0]) if len(values) else 0),
+        peak_hour=("hour", lambda values: int(pd.Series(values).dropna().mode().iloc[0]) if pd.Series(values).dropna().any() else 0),
     )
 
     segments_payload = []
-    for (from_station, to_station), row in grouped.reset_index().iterrows():
+    for _, row in grouped.reset_index().iterrows():
         segments_payload.append(
             {
                 "fromStationId": str(int(row["from_station_id"])),
@@ -397,6 +404,8 @@ def _build_trip_heatmap(summary: pd.DataFrame, segments: pd.DataFrame, filters: 
     merged = segments.merge(summary_key, on=["line_id", "train_id", "date", "trip_key"], how="inner")
 
     segment_sequence = _build_station_sequence(segments)
+    if len(segment_sequence) < 2:
+        return {"trips": [], "segments": [], "cells": []}
     segment_index = {(segment_sequence[idx], segment_sequence[idx + 1]): idx for idx in range(len(segment_sequence) - 1)}
 
     trip_order = summary.drop_duplicates(subset=["trip_key", "train_id"])
@@ -438,7 +447,7 @@ def _build_timetable_scatter(summary: pd.DataFrame) -> Dict[str, Any]:
 
     grouped = summary.groupby("trip_key").agg(
         avg_load=("avg_load", "mean"),
-        p95_load=("p95_load", lambda values: float(np.percentile(values.dropna(), 95))),
+        p95_load=("p95_load", _p95),
         sample_trips=("trip_key", "count"),
     )
     points = []
@@ -462,11 +471,14 @@ def build_suggestions(summary: pd.DataFrame, segments: pd.DataFrame, filters: Di
 
     if not segments.empty:
         grouped = segments.groupby(["line_id", "from_station_id", "to_station_id"]).agg(
-            p95_full_rate=("full_rate", lambda values: float(np.percentile(values.dropna(), 95))),
+            p95_full_rate=("full_rate", _p95),
         )
-        for (line_id, from_station, to_station), row in grouped.reset_index().iterrows():
+        for _, row in grouped.reset_index().iterrows():
             if row["p95_full_rate"] <= overload_threshold:
                 continue
+            line_id = row["line_id"]
+            from_station = row["from_station_id"]
+            to_station = row["to_station_id"]
             suggestion_id = f"SG-{line_id}-{from_station}-{to_station}"
             suggestions.append(
                 {

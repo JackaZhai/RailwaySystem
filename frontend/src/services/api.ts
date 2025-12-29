@@ -494,6 +494,60 @@ export const apiService = {
         records: number
       }>
     }>('/data/stats/')
+  },
+
+  // Route optimization
+  getRouteLines: () => {
+    return api.get<RouteLine[]>('/lines/')
+  },
+
+  getLineStations: (lineId: string, direction: string) => {
+    return api.get<{ lineId: string; direction: string; stations: LineStation[] }>(
+      `/lines/${lineId}/stations/`,
+      { params: { direction } }
+    )
+  },
+
+  getRouteOptKpi: (filters: RouteOptFilters) => {
+    return api.post<RouteKpi>('/route-opt/kpi/', filters)
+  },
+
+  getLineLoadHeatmap: (filters: RouteOptFilters) => {
+    return api.post<LineLoadHeatmap>('/route-opt/line-load/heatmap/', filters)
+  },
+
+  getLineLoadTrend: (filters: RouteOptFilters) => {
+    return api.post<LineLoadTrend>('/route-opt/line-load/trend/', filters)
+  },
+
+  getSectionCorridor: (filters: RouteOptFilters & { lineId?: string }) => {
+    return api.post<SectionCorridor>('/route-opt/section-load/corridor/', filters)
+  },
+
+  getTripHeatmap: (filters: RouteOptFilters & { lineId?: string }) => {
+    return api.post<TripHeatmap>('/route-opt/trip-load/heatmap/', filters)
+  },
+
+  getTimetableScatter: (filters: RouteOptFilters & { lineId?: string }) => {
+    return api.post<TimetableScatter>('/route-opt/timetable/demand-scatter/', filters)
+  },
+
+  getSuggestionList: (payload: {
+    filters: RouteOptFilters
+    types?: string[]
+    sortBy?: string
+    page?: number
+    pageSize?: number
+  }) => {
+    return api.post<SuggestionList>('/route-opt/suggestions/list/', payload)
+  },
+
+  getSuggestionDetail: (id: string) => {
+    return api.get<SuggestionDetail>(`/route-opt/suggestions/${id}/`)
+  },
+
+  getHubMetrics: (filters: RouteOptFilters) => {
+    return api.post<HubMetrics>('/route-opt/hubs/metrics/', filters)
   }
 }
 
