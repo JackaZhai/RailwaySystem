@@ -16,6 +16,7 @@ SUMMARY_FILE = DATA_DIR / "train_passenger_summary.csv"
 SEGMENT_FILE = DATA_DIR / "train_segment_detail.csv"
 STATION_FILE = DATA_DIR / "train_station_detail.csv"
 TRIP_FILE = DATA_DIR / "gaotie_clean_with_tripkey.parquet"
+ROUTE_STATIONS_FILE = DATA_DIR / "route_stations.csv"
 
 
 def _parse_date(value: Any) -> datetime.date | None:
@@ -79,8 +80,20 @@ def load_summary() -> pd.DataFrame:
             "峰值车上人数": "peak_onboard",
             "最拥挤区间": "crowded_segment",
             "平均断面客流": "avg_segment_flow",
+            "人公里(PKM)": "pkm",
+            "车公里(TKM)": "tkm",
         }
     )
+    if "pkm" not in df.columns:
+        for col in df.columns:
+            if "PKM" in str(col):
+                df["pkm"] = pd.to_numeric(df[col], errors="coerce")
+                break
+    if "tkm" not in df.columns:
+        for col in df.columns:
+            if "TKM" in str(col):
+                df["tkm"] = pd.to_numeric(df[col], errors="coerce")
+                break
     df["date"] = df["date"].apply(_parse_date)
     df["trip_key"] = df["trip_key"].apply(_parse_trip_key)
     df["hour"] = df["trip_key"].apply(_trip_key_to_hour)
@@ -108,6 +121,21 @@ def load_segments() -> pd.DataFrame:
     )
     df["date"] = df["date"].apply(_parse_date)
     df["trip_key"] = df["trip_key"].apply(_parse_trip_key)
+    return df
+
+
+@lru_cache(maxsize=1)
+def load_route_stations() -> pd.DataFrame:
+    df = pd.read_csv(ROUTE_STATIONS_FILE, skiprows=[1])
+    df = df.rename(
+        columns={
+            "yyxlbm": "line_id",
+            "yqzdjjl": "segment_distance",
+            "ysjl": "cumulative_distance",
+        }
+    )
+    df["segment_distance"] = pd.to_numeric(df.get("segment_distance"), errors="coerce")
+    df["cumulative_distance"] = pd.to_numeric(df.get("cumulative_distance"), errors="coerce")
     return df
 
 
@@ -360,6 +388,44 @@ def _build_line_trend(summary: pd.DataFrame) -> Dict[str, Any]:
         ]
         series.append({"lineId": str(line_id), "direction": "up", "points": points})
     return {"series": series}
+
+
+def _build_density_rank(segments: pd.DataFrame) -> Dict[str, Any]:
+    if segments.empty or "segment_pkm" not in segments.columns or "segment_distance" not in segments.columns:
+        return {"items": []}
+
+    segments = segments.copy()
+    segments["segment_pkm"] = pd.to_numeric(segments["segment_pkm"], errors="coerce")
+    segments["segment_distance"] = pd.to_numeric(segments["segment_distance"], errors="coerce")
+    segments = segments.dropna(subset=["segment_pkm", "segment_distance"])
+    segments = segments[segments["segment_distance"] > 0]
+
+    grouped = segments.groupby(["from_station_id", "to_station_id"]).agg(
+        total_pkm=("segment_pkm", "sum"),
+        total_distance=("segment_distance", "sum"),
+        line_id=("line_id", "first"),
+    )
+
+    items = []
+    for (from_station_id, to_station_id), row in grouped.iterrows():
+        total_distance = float(row["total_distance"])
+        if total_distance <= 0:
+            continue
+        total_pkm = float(row["total_pkm"])
+        density = total_pkm / total_distance
+        items.append(
+            {
+                "fromStationId": str(int(from_station_id)),
+                "toStationId": str(int(to_station_id)),
+                "lineId": str(row["line_id"]) if pd.notna(row["line_id"]) else "",
+                "totalPkm": total_pkm,
+                "segmentDistance": total_distance,
+                "density": density,
+            }
+        )
+
+    items = sorted(items, key=lambda item: item["density"], reverse=True)
+    return {"items": items}
 
 
 def _build_section_corridor(summary: pd.DataFrame, segments: pd.DataFrame, filters: Dict[str, Any]) -> Dict[str, Any]:
@@ -643,6 +709,13 @@ class LineLoadTrendView(APIView):
         filters = request.data or {}
         summary = _apply_common_filters(load_summary(), filters)
         return Response(_build_line_trend(summary))
+
+
+class DensityRankView(APIView):
+    def post(self, request):
+        filters = request.data or {}
+        segments = _apply_common_filters(load_segments(), filters)
+        return Response(_build_density_rank(segments))
 
 
 class SectionLoadCorridorView(APIView):

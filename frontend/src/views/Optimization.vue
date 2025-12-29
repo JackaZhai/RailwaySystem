@@ -359,6 +359,43 @@
         <div v-if="suggestionItems.length === 0" class="empty-state">当前筛选无建议。</div>
       </div>
     </div>
+
+    <div class="panel-card density-card">
+      <div class="panel-header">
+        <h3>客流密度排行</h3>
+        <span class="panel-subtitle">区间人公里 / 区间距离（人公里 / 公里）</span>
+      </div>
+      <div v-if="densityChartData.length > 0" class="density-chart-wrap">
+        <BarChart
+          chart-id="density-rank-chart"
+          :data="densityChartData"
+          :horizontal="true"
+          y-axis-name="区间"
+          x-axis-name="客流密度"
+          :legend="false"
+          :toolbox="false"
+        />
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>区间</th>
+            <th>旅客周转量</th>
+            <th>区间距离</th>
+            <th>客流密度</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in densityRanking" :key="`${item.lineId}-${item.fromStationId}-${item.toStationId}`">
+            <td>{{ formatStationName(item.fromStationId) }} → {{ formatStationName(item.toStationId) }}</td>
+            <td>{{ formatMetric(item.totalPkm, 0) }}</td>
+            <td>{{ formatMetric(item.segmentDistance, 1) }}</td>
+            <td>{{ formatMetric(item.density, 2) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="densityRanking.length === 0" class="empty-state">暂无客流密度数据</div>
+    </div>
   </div>
 </template>
 
@@ -367,12 +404,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { dataService } from '@/services/api'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import LineChart from '@/components/charts/LineChart.vue'
+import BarChart from '@/components/charts/BarChart.vue'
 import type {
   RouteLine,
   RouteOptFilters,
   RouteKpi,
   LineLoadHeatmap,
   LineLoadTrend,
+  DensityRankResponse,
   SectionCorridor,
   TripHeatmap,
   TimetableScatter,
@@ -405,6 +444,7 @@ const tripHeatmap = ref<TripHeatmap | null>(null)
 const timetableScatter = ref<TimetableScatter | null>(null)
 const suggestionList = ref<SuggestionList | null>(null)
 const hubMetrics = ref<HubMetrics | null>(null)
+const densityRank = ref<DensityRankResponse | null>(null)
 
 const stationNameMap: Record<string, string> = {
   '810': '遂宁',
@@ -598,6 +638,17 @@ const suggestionItems = computed(() => {
   return suggestionList.value?.items || []
 })
 
+const densityRanking = computed(() => {
+  return densityRank.value?.items || []
+})
+
+const densityChartData = computed(() => {
+  return densityRanking.value.slice(0, 8).map((item) => ({
+    name: `${formatStationName(item.fromStationId)} → ${formatStationName(item.toStationId)}`,
+    value: Number(item.density.toFixed(2))
+  }))
+})
+
 const suggestionTypeLabel = (type: string) => {
   if (type === 'addTrips') return '加开'
   if (type === 'timetable') return '时刻表'
@@ -637,6 +688,13 @@ const formatSuggestionReason = (item: { reason: string; type: string }) => {
     return item.reason.replace('p95 load', 'p95 负载').replace('avg load', '平均负载').replace('over', '超过').replace('below', '低于')
   }
   return '建议优化'
+}
+
+const formatMetric = (value: number, digits: number) => {
+  if (!Number.isFinite(value)) {
+    return '-'
+  }
+  return value.toFixed(digits)
 }
 
 const toggleLine = (lineId: string) => {
@@ -713,7 +771,8 @@ const refreshAll = async () => {
       tripRes,
       timetableRes,
       suggestionRes,
-      hubRes
+      hubRes,
+      densityRes
     ] = await Promise.all([
       dataService.getRouteOptKpi(filterPayload),
       dataService.getLineLoadHeatmap(filterPayload),
@@ -722,7 +781,8 @@ const refreshAll = async () => {
       dataService.getTripHeatmap(lineIdPayload),
       dataService.getTimetableScatter(lineIdPayload),
       dataService.getSuggestionList({ filters: filterPayload, sortBy: 'impact', page: 1, pageSize: 20 }),
-      dataService.getHubMetrics(filterPayload)
+      dataService.getHubMetrics(filterPayload),
+      dataService.getDensityRank(filterPayload)
     ])
 
     kpi.value = kpiRes
@@ -736,6 +796,7 @@ const refreshAll = async () => {
     timetableScatter.value = timetableRes
     suggestionList.value = suggestionRes
     hubMetrics.value = hubRes
+    densityRank.value = densityRes
   } catch (error) {
     console.error('线路优化数据加载失败:', error)
     errorMessage.value = '数据加载失败，请稍后重试或检查后端服务。'
@@ -1081,6 +1142,11 @@ onMounted(async () => {
 
 .trend-chart-wrap {
   height: 360px;
+}
+
+.density-chart-wrap {
+  height: 320px;
+  margin: var(--spacing-3) 0 var(--spacing-4);
 }
 
 .data-table {

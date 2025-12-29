@@ -62,6 +62,19 @@ export interface LineLoadTrend {
   }>
 }
 
+export interface DensityRankItem {
+  fromStationId: string
+  toStationId: string
+  lineId: string
+  totalPkm: number
+  segmentDistance: number
+  density: number
+}
+
+export interface DensityRankResponse {
+  items: DensityRankItem[]
+}
+
 export interface SectionCorridor {
   lineId: string
   direction: string

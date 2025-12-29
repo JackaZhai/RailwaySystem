@@ -40,6 +40,7 @@ urlpatterns = [
     path('api/route-opt/kpi/', analytics_views.RouteOptKpiView.as_view(), name='route-opt-kpi'),
     path('api/route-opt/line-load/heatmap/', analytics_views.LineLoadHeatmapView.as_view(), name='route-opt-line-heatmap'),
     path('api/route-opt/line-load/trend/', analytics_views.LineLoadTrendView.as_view(), name='route-opt-line-trend'),
+    path('api/route-opt/density/rank/', analytics_views.DensityRankView.as_view(), name='route-opt-density-rank'),
     path('api/route-opt/section-load/corridor/', analytics_views.SectionLoadCorridorView.as_view(), name='route-opt-section-corridor'),
     path('api/route-opt/trip-load/heatmap/', analytics_views.TripLoadHeatmapView.as_view(), name='route-opt-trip-heatmap'),
     path('api/route-opt/timetable/demand-scatter/', analytics_views.TimetableDemandScatterView.as_view(), name='route-opt-timetable-scatter'),

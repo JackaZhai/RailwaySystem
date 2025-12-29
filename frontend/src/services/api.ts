@@ -57,6 +57,7 @@ import type {
   RouteKpi,
   LineLoadHeatmap,
   LineLoadTrend,
+  DensityRankResponse,
   SectionCorridor,
   TripHeatmap,
   TimetableScatter,
@@ -521,6 +522,10 @@ export const apiService = {
 
   getLineLoadTrend: (filters: RouteOptFilters) => {
     return api.post<LineLoadTrend>('/route-opt/line-load/trend/', filters)
+  },
+
+  getDensityRank: (filters: RouteOptFilters) => {
+    return api.post<DensityRankResponse>('/route-opt/density/rank/', filters)
   },
 
   getSectionCorridor: (filters: RouteOptFilters & { lineId?: string }) => {
