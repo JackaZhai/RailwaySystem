@@ -11,6 +11,7 @@ import subprocess
 import signal
 import atexit
 from pathlib import Path
+import socket
 
 def print_header():
     """打印标题"""
@@ -53,39 +54,67 @@ def check_dependencies():
 
     # 检查npm
     try:
-        subprocess.run(["npm", "--version"], shell=(os.name == 'nt'), capture_output=True, check=True)
+        subprocess.run(["npm", "--version"], capture_output=True, check=True)
         print("  ✅ npm可用")
-    except:
-        print("  ❌ npm不可用")
+    except Exception as e:
+        print(f"  ❌ npm不可用: {e}")
         return False
 
     return True
+
+def is_port_available(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
 
 def start_backend(backend_dir):
     """启动后端服务器"""
     print("\n🚀 启动后端Django服务器...")
 
-    # 启动Django服务器
-    # 使用 cwd 参数指定工作目录，而不是 os.chdir
-    backend_proc = subprocess.Popen(
-        [sys.executable, "manage.py", "runserver", "0.0.0.0:8080"],
-        cwd=backend_dir,
-        # stdout=subprocess.PIPE,
-        # stderr=subprocess.STDOUT,
-        # text=True,
-        # bufsize=1,
-        # universal_newlines=True
-    )
+    backend_proc = None
+    backend_port = None
 
-    print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: 8080)")
+    candidate_ports = [8080, 8000]
+    for port in candidate_ports:
+        if not is_port_available("0.0.0.0", port):
+            continue
 
-    # 等待后端启动
-    print("⏳ 等待后端服务器启动...")
-    time.sleep(5)
+        backend_proc = subprocess.Popen(
+            [sys.executable, "manage.py", "runserver", f"0.0.0.0:{port}"],
+            cwd=str(backend_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+
+        print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: {port})")
+
+        print("⏳ 等待后端服务器启动...")
+        time.sleep(3)
+
+        if backend_proc.poll() is None:
+            backend_port = port
+            break
 
     # 检查后端是否在运行
-    if backend_proc.poll() is not None:
+    if backend_proc is None or backend_port is None or backend_proc.poll() is not None:
         print("❌ 错误: 后端服务器启动失败")
+        # 打印输出
+        if backend_proc is not None:
+            output, _ = backend_proc.communicate()
+            if output:
+                print("后端输出:")
+                print(output[:500])  # 只打印前500字符
         return None
 
     # 测试后端API
@@ -93,8 +122,7 @@ def start_backend(backend_dir):
     try:
         import urllib.request
         import urllib.error
-        # Use 127.0.0.1 to avoid IPv6 issues on Windows
-        response = urllib.request.urlopen("http://127.0.0.1:8080/api/stations/?format=json", timeout=10)
+        response = urllib.request.urlopen(f"http://localhost:{backend_port}/api/stations/?format=json", timeout=5)
         if response.status == 200:
             print("✅ 后端API连接成功")
         else:
@@ -103,19 +131,19 @@ def start_backend(backend_dir):
         print(f"⚠️  后端API连接测试失败: {e}")
         print("   但继续启动前端...")
 
-    return backend_proc
+    return backend_proc, backend_port
 
-def start_frontend(frontend_dir):
+def start_frontend(frontend_dir, backend_port):
     """启动前端服务器"""
     print("\n🚀 启动前端Vite开发服务器...")
 
     # 检查node_modules
-    node_modules_path = frontend_dir / "node_modules"
+    node_modules_path = Path(frontend_dir) / "node_modules"
     if not node_modules_path.exists():
         print("📦 未找到node_modules，正在安装依赖...")
         install_proc = subprocess.run(
             ["npm", "install"],
-            cwd=frontend_dir,
+            cwd=str(frontend_dir),
             shell=(os.name == 'nt'),
             capture_output=True,
             text=True
@@ -126,15 +154,19 @@ def start_frontend(frontend_dir):
             return None
 
     # 启动Vite开发服务器
+    child_env = os.environ.copy()
+    if backend_port:
+        child_env["VITE_API_BASE_URL"] = f"http://localhost:{backend_port}/api"
+
     frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
-        cwd=frontend_dir,
-        shell=(os.name == 'nt'),
-        # stdout=subprocess.PIPE,
-        # stderr=subprocess.STDOUT,
-        # text=True,
-        # bufsize=1,
-        # universal_newlines=True
+        cwd=str(frontend_dir),
+        env=child_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        universal_newlines=True
     )
 
     print(f"  前端服务器启动中 (PID: {frontend_proc.pid})")
@@ -148,18 +180,7 @@ def start_frontend(frontend_dir):
         print("❌ 错误: 前端服务器启动失败")
         return None
 
-    # 检查端口
-    frontend_port = 5173
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("localhost", frontend_port))
-        sock.close()
-        # 端口可用，但Vite可能用了其他端口
-        print(f"⚠️  端口 {frontend_port} 可用，但Vite可能使用了其他端口")
-        print(f"   请检查Vite输出确认实际端口")
-    except:
-        print(f"✅ 前端服务器运行在端口: {frontend_port}")
+    print("✅ 前端服务器已启动（端口以 Vite 输出为准）")
 
     return frontend_proc
 
@@ -191,15 +212,16 @@ def main():
 
     backend_proc = None
     frontend_proc = None
+    backend_port = None
 
     try:
         # 启动后端
-        backend_proc = start_backend(backend_dir)
+        backend_proc, backend_port = start_backend(backend_dir)
         if backend_proc is None:
             sys.exit(1)
 
         # 启动前端
-        frontend_proc = start_frontend(frontend_dir)
+        frontend_proc = start_frontend(frontend_dir, backend_port)
         if frontend_proc is None:
             cleanup(backend_proc, None)
             sys.exit(1)
@@ -221,10 +243,10 @@ def main():
         print("   后端API:  http://localhost:8080/api/")
         print()
         print("📊 API端点示例:")
-        print("   - 站点列表: http://localhost:8080/api/stations/")
-        print("   - 列车列表: http://localhost:8080/api/trains/")
-        print("   - 客运记录: http://localhost:8080/api/passenger-flows/")
-        print("   - 客流分析: http://localhost:8080/api/analytics/flow/ (POST)")
+        print(f"   - 站点列表: http://localhost:{backend_port}/api/stations/")
+        print(f"   - 列车列表: http://localhost:{backend_port}/api/trains/")
+        print(f"   - 客运记录: http://localhost:{backend_port}/api/passenger-flows/")
+        print(f"   - 客流分析: http://localhost:{backend_port}/api/analytics/flow/ (POST)")
         print()
         print("🛑 按 Ctrl+C 关闭所有服务器")
         print("=" * 50)

@@ -6,8 +6,16 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '')
-
-  const backendTarget = (env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/api\/?$/, '')
+  const apiTarget = (() => {
+    const raw = env.VITE_API_BASE_URL
+    if (!raw) return 'http://localhost:8080'
+    try {
+      const url = new URL(raw)
+      return `${url.protocol}//${url.host}`
+    } catch {
+      return raw.replace(/\/+$/, '')
+    }
+  })()
 
   return {
     plugins: [vue()],
@@ -20,7 +28,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // 代理API请求到Django后端
         '/api': {
-          target: backendTarget,
+          target: apiTarget,
           changeOrigin: true,
           // Django后端API路径已经包含/api前缀，所以不需要重写
         },

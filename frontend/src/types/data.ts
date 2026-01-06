@@ -60,6 +60,17 @@ export interface PassengerFlow {
   total_passengers?: number
 }
 
+export interface PassengerRecord {
+  id: number
+  timestamp: string
+  stationId: number
+  passengerCount: number
+  lineId?: number
+  trainId?: number
+  passengersIn?: number
+  passengersOut?: number
+}
+
 // 分页响应通用接口
 export interface PaginatedResponse<T> {
   count: number

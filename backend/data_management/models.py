@@ -10,6 +10,7 @@ class Station(models.Model):
     code = models.IntegerField(null=True, blank=True, verbose_name='站点代码')
     telecode = models.CharField(max_length=10, unique=True, verbose_name='站点电报码')
     shortname = models.CharField(max_length=20, null=True, blank=True, verbose_name='站点简称')
+    platform_count = models.IntegerField(default=2, verbose_name='站台数量')
     created_at = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 

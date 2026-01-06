@@ -1,4 +1,4 @@
-﻿
+
 <template>
   <div class="data-management">
     <section class="page-hero">
@@ -727,8 +727,8 @@ const loadStats = async () => {
   }
 }
 
-const fetchAllPages = async <T>(
-  fetcher: (params: { page: number; page_size: number }) => Promise<{ results?: T[]; count?: number }>
+const fetchAllPages = async <T,>(
+  fetcher: any
 ) => {
   const pageSize = 200
   let page = 1
@@ -1054,7 +1054,7 @@ const formatDateTime = (dateString: string) => {
   try {
     const date = new Date(dateString)
     return date.toLocaleString('zh-CN')
-  } catch (error) {
+  } catch {
     return dateString
   }
 }

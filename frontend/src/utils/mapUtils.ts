@@ -183,7 +183,7 @@ export function calculateCenter(markers: StationMarker[]): [number, number] {
 export function clusterMarkers(
   markers: StationMarker[],
   zoom: number,
-  _clusterDistance = 50
+  clusterDistance = 50
 ): StationMarker[] {
   if (zoom >= 14 || markers.length <= 10) {
     return markers // 高缩放级别或标记较少时不需要聚类
@@ -208,7 +208,7 @@ export function clusterMarkers(
       const distance = Math.sqrt(Math.pow(lng2 - lng1, 2) + Math.pow(lat2 - lat1, 2))
 
       // 根据缩放级别调整聚类阈值
-      const threshold = 0.1 / Math.pow(2, zoom - 10)
+      const threshold = (0.1 / Math.pow(2, zoom - 10)) * (clusterDistance / 50)
 
       if (distance < threshold) {
         cluster.push(markers[j]!)

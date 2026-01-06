@@ -56,14 +56,14 @@ export const useDataStore = defineStore('data', () => {
   }
 
   const updatePassengerRecord = (id: number, updates: Partial<PassengerRecord>) => {
-    const index = passengerRecords.value.findIndex(record => record.id === id)
+    const index = passengerRecords.value.findIndex((record: PassengerRecord) => record.id === id)
     if (index !== -1) {
       passengerRecords.value[index] = { ...passengerRecords.value[index], ...updates } as PassengerRecord
     }
   }
 
   const deletePassengerRecord = (id: number) => {
-    const index = passengerRecords.value.findIndex(record => record.id === id)
+    const index = passengerRecords.value.findIndex((record: PassengerRecord) => record.id === id)
     if (index !== -1) {
       passengerRecords.value.splice(index, 1)
     }
@@ -73,16 +73,20 @@ export const useDataStore = defineStore('data', () => {
     return stations.value.find(station => station.id === id)
   }
 
-  const getStationByCode = (code: string) => {
-    return stations.value.find(station => station.code === code)
+  const getStationByCode = (code: string | number) => {
+    const normalized = typeof code === 'number' ? code : Number(code)
+    if (!Number.isNaN(normalized)) {
+      return stations.value.find((station: Station) => station.code === normalized)
+    }
+    return stations.value.find((station: Station) => station.telecode === String(code))
   }
 
   const getRecordsByStation = (stationId: number) => {
-    return passengerRecords.value.filter(record => record.stationId === stationId)
+    return passengerRecords.value.filter((record: PassengerRecord) => record.stationId === stationId)
   }
 
   const getRecordsByDateRange = (start: Date, end: Date) => {
-    return passengerRecords.value.filter(record => {
+    return passengerRecords.value.filter((record: PassengerRecord) => {
       const recordDate = new Date(record.timestamp)
       return recordDate >= start && recordDate <= end
     })

@@ -50,7 +50,7 @@ apiClient.interceptors.request.use(
 
 // 响应拦截器
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => response,
   (error) => {
     console.error('API请求错误:', error);
 
@@ -68,6 +68,8 @@ apiClient.interceptors.response.use(
   }
 );
 
+const toISODate = (date: Date) => date.toISOString().split('T')[0] || '';
+
 /**
  * 客流分析服务 - 连接到Django后端API
  */
@@ -78,7 +80,8 @@ export const passengerService = {
   async getFlowTrends(params: AnalysisRequest): Promise<FlowTrendData> {
     try {
       // 调用Django客流分析API
-      const backendData = await apiClient.post('/analytics/flow/', params);
+      const response = await apiClient.post('/analytics/flow/', params);
+      const backendData = response.data as any;
       const items = Array.isArray(backendData)
         ? backendData
         : (backendData?.data || []);
@@ -118,7 +121,7 @@ export const passengerService = {
       queryParams.append('_t', Date.now().toString());
 
       const response = await apiClient.get(`/passenger-flows/station_ranking/?${queryParams}`);
-      const backendData = response;
+      const backendData = response.data as any[];
 
       // 转换数据格式以匹配前端类型
       const stationRankings: StationRanking[] = backendData.map((item: any) => ({
@@ -151,11 +154,12 @@ export const passengerService = {
           stationIds: params.stationIds,
           lineIds: params.lineIds,
           trainIds: params.trainIds,
-          _t: Date.now() // 防止缓存
+          _t: Date.now()
         }
       });
+      const items = response.data as any[];
 
-      return (response || []).map((item: any) => ({
+      return (items || []).map((item: any) => ({
         lineId: item.lineId,
         lineName: item.lineName,
         lineCode: item.lineCode,
@@ -184,7 +188,7 @@ export const passengerService = {
       queryParams.append('_t', Date.now().toString());
 
       const response = await apiClient.get(`/passenger-flows/time_distribution/?${queryParams}`);
-      const backendData = response;
+      const backendData = response.data as any[];
 
       // 转换数据格式以匹配前端类型
       const timeDistribution: TimeDistribution[] = backendData.map((item: any) => ({
@@ -218,11 +222,11 @@ export const passengerService = {
           lineIds: params.lineIds,
           trainIds: params.trainIds,
           granularity,
-          _t: Date.now() // 防止缓存
+          _t: Date.now()
         }
       });
 
-      return response || [];
+      return (response.data || []) as TimePeriodData[];
     } catch (error) {
       console.error('获取时间段统计失败:', error);
       throw error;
@@ -245,7 +249,7 @@ export const passengerService = {
         }
       });
 
-      const stations = response?.stations || [];
+      const stations = (response.data as any)?.stations || [];
       return stations.map((item: any) => ({
         stationId: item.stationId ?? item.id,
         stationName: item.stationName ?? item.name,
@@ -281,7 +285,8 @@ export const passengerService = {
         }
       });
 
-      return (response || []).map((item: any) => ({
+      const items = response.data as any[];
+      return (items || []).map((item: any) => ({
         timestamp: item.timestamp,
         actual: item.actual,
         forecast: item.forecast,
@@ -299,24 +304,15 @@ export const passengerService = {
    * 获取实时客流数据 - 暂时使用模拟数据
    */
   async getRealTimeFlows(): Promise<RealTimeFlow[]> {
-    try {
-      return [];
-    } catch (error) {
-      console.error('获取实时客流失败:', error);
-      throw error;
-    }
+    return [];
   },
 
   /**
    * 获取客流异常检测 - 暂无后端接口
    */
   async getFlowAnomalies(_params: AnalysisRequest): Promise<FlowAnomaly[]> {
-    try {
-      return [];
-    } catch (error) {
-      console.error('获取客流异常失败:', error);
-      throw error;
-    }
+    void _params
+    return [];
   },
 
   /**
@@ -374,9 +370,10 @@ export const passengerService = {
         }
       });
 
-      const stations = response?.stations || [];
-      const times = response?.times || [];
-      const matrix = response?.data || [];
+      const payload = response.data as any;
+      const stations = payload?.stations || [];
+      const times = payload?.times || [];
+      const matrix = payload?.data || [];
       const heatmapData: HeatmapData[] = [];
 
       stations.forEach((station: string, rowIndex: number) => {
@@ -414,7 +411,8 @@ export const passengerService = {
         }
       });
 
-      return (response || []).map((item: any) => ({
+      const items = response.data as any[];
+      return (items || []).map((item: any) => ({
         fromStationId: item.fromStationId,
         toStationId: item.toStationId,
         fromStationName: item.fromStationName,
@@ -459,7 +457,7 @@ export const passengerService = {
           item.totalPassengers > max.totalPassengers ? item : max,
           { hour: 0, totalPassengers: 0 }
         ).hour,
-        busiestStation: stationRankings.length > 0 ? stationRankings[0].stationName : '无数据',
+        busiestStation: stationRankings[0]?.stationName ?? '无数据',
         busiestLine: lineLoads.length > 0 ?
           lineLoads.reduce((max, line) => line.totalPassengers > max.totalPassengers ? line : max).lineName : '无数据'
       };
@@ -487,8 +485,9 @@ export const passengerService = {
   /**
    * 导出分析数据 - 暂时返回模拟数据
    */
-  async exportAnalysisData(params: AnalysisRequest, options: ExportOptions): Promise<Blob> {
+  async exportAnalysisData(params: AnalysisRequest, _options: ExportOptions): Promise<Blob> {
     try {
+      void _options
       // 获取分析数据
       const analysisData = await this.getComprehensiveAnalysis(params);
 
@@ -551,20 +550,21 @@ export const passengerService = {
       ]);
 
       // 获取客运记录的日期范围
-      const flows = flowsResponse.results || flowsResponse;
-      const dates = flows.map((flow: any) => new Date(flow.operation_date));
-      const minDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : new Date();
-      const maxDate = dates.length > 0 ? new Date(Math.max(...dates.map(d => d.getTime()))) : new Date();
+      const flowsData = flowsResponse.data as any;
+      const flows = flowsData.results || flowsData;
+      const dates: Date[] = flows.map((flow: any) => new Date(flow.operation_date));
+      const minDate = dates.length > 0 ? new Date(Math.min(...dates.map((d: Date) => d.getTime()))) : new Date();
+      const maxDate = dates.length > 0 ? new Date(Math.max(...dates.map((d: Date) => d.getTime()))) : new Date();
 
       return {
         totalRecords: flows.length,
         dateRange: {
-          start: minDate.toISOString().split('T')[0],
-          end: maxDate.toISOString().split('T')[0]
+          start: toISODate(minDate),
+          end: toISODate(maxDate)
         },
-        stations: stationsResponse.count || (stationsResponse.results ? stationsResponse.results.length : stationsResponse.length),
-        lines: routesResponse.count || (routesResponse.results ? routesResponse.results.length : routesResponse.length),
-        trains: trainsResponse.count || (trainsResponse.results ? trainsResponse.results.length : trainsResponse.length),
+        stations: (stationsResponse.data as any)?.count || (((stationsResponse.data as any)?.results ? (stationsResponse.data as any).results.length : (stationsResponse.data as any).length) ?? 0),
+        lines: (routesResponse.data as any)?.count || (((routesResponse.data as any)?.results ? (routesResponse.data as any).results.length : (routesResponse.data as any).length) ?? 0),
+        trains: (trainsResponse.data as any)?.count || (((trainsResponse.data as any)?.results ? (trainsResponse.data as any).results.length : (trainsResponse.data as any).length) ?? 0),
         lastUpdate: new Date().toISOString()
       };
     } catch (error) {
@@ -584,7 +584,8 @@ export const passengerService = {
   }>> {
     try {
       const response = await apiClient.get('/stations/');
-      const stations = response.results || response;
+      const data = response.data as any;
+      const stations = data.results || data;
 
       return stations.map((station: any) => ({
         id: station.id,
@@ -608,7 +609,8 @@ export const passengerService = {
   }>> {
     try {
       const response = await apiClient.get('/routes/');
-      const routes = response.results || response;
+      const data = response.data as any;
+      const routes = data.results || data;
 
       return routes.map((route: any) => ({
         id: route.id,
@@ -631,7 +633,8 @@ export const passengerService = {
   }>> {
     try {
       const response = await apiClient.get('/trains/');
-      const trains = response.results || response;
+      const data = response.data as any;
+      const trains = data.results || data;
 
       return trains.map((train: any) => ({
         id: train.id,

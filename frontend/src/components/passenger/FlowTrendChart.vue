@@ -4,9 +4,9 @@
     <div v-if="showHeader" class="chart-header">
       <div class="chart-title">
         <h3>{{ title }}</h3>
-        <p class="chart-subtitle" v-if="subtitle">{{ subtitle }}</p>
+        <p v-if="subtitle" class="chart-subtitle">{{ subtitle }}</p>
       </div>
-      <div class="chart-actions" v-if="showActions">
+      <div v-if="showActions" class="chart-actions">
         <button
           class="btn-icon"
           :title="isFullscreen ? '退出全屏' : '全屏查看'"
@@ -34,8 +34,8 @@
     ></div>
 
     <!-- 图表说明 -->
-    <div class="chart-footer" v-if="showFooter">
-      <div class="chart-stats" v-if="stats">
+    <div v-if="showFooter" class="chart-footer">
+      <div v-if="stats" class="chart-stats">
         <div class="stat-item">
           <span class="stat-label">总计:</span>
           <span class="stat-value">{{ formatNumber(stats.total) }}</span>
@@ -44,15 +44,15 @@
           <span class="stat-label">平均:</span>
           <span class="stat-value">{{ formatNumber(stats.average) }}</span>
         </div>
-        <div class="stat-item" v-if="stats.growthRate !== undefined">
+        <div v-if="stats.growthRate !== undefined" class="stat-item">
           <span class="stat-label">增长率:</span>
           <span class="stat-value" :class="getGrowthRateClass(stats.growthRate)">
             {{ formatPercent(stats.growthRate) }}
           </span>
         </div>
       </div>
-      <div class="chart-legend" v-if="showLegend">
-        <div class="legend-item" v-for="item in legendItems" :key="item.name">
+      <div v-if="showLegend" class="chart-legend">
+        <div v-for="item in legendItems" :key="item.name" class="legend-item">
           <span class="legend-color" :style="{ backgroundColor: item.color }"></span>
           <span class="legend-text">{{ item.name }}</span>
         </div>
@@ -62,10 +62,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue';
 import * as echarts from 'echarts';
 import type { ECharts, EChartsOption } from 'echarts';
-import type { FlowTrendData, FlowTrendPoint } from '@/types/passenger';
+import type { FlowTrendData } from '@/types/passenger';
 
 interface Props {
   // 数据
@@ -100,7 +100,6 @@ const chartInstance = ref<ECharts | null>(null);
 
 // 状态
 const isFullscreen = ref(false);
-const isLoading = ref(false);
 
 // 计算属性
 const stats = computed(() => {

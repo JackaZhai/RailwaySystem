@@ -26,7 +26,13 @@ SECRET_KEY = 'django-insecure-o+-qq%8*w)yuyxxk9o@39&cf6ipmw_oh+4(kkidb4l(jxxe(jw
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '::1',
+    '0.0.0.0',
+    'testserver',
+]
 
 # 高德地图 Web 服务 Key（可通过环境变量覆盖）
 AMAP_WEB_KEY = os.getenv('AMAP_WEB_KEY', '1b551943faa31fa72a31d9628fb07c4f')

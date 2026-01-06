@@ -1,2 +1,11 @@
 backend/db/railway.sqlite3
+backend/railway.sqlite3
+backend/*.sqlite3
+db/railway.sqlite3
+db/*.sqlite3
+__pycache__/
+**/__pycache__/
 *.pyc
+*.pyo
+.venv/
+venv/

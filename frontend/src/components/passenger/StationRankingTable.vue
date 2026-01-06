@@ -4,9 +4,9 @@
     <div v-if="showHeader" class="table-header">
       <div class="table-title">
         <h3>{{ title }}</h3>
-        <p class="table-subtitle" v-if="subtitle">{{ subtitle }}</p>
+        <p v-if="subtitle" class="table-subtitle">{{ subtitle }}</p>
       </div>
-      <div class="table-actions" v-if="showActions">
+      <div v-if="showActions" class="table-actions">
         <div class="search-box">
           <input
             v-model="searchQuery"
@@ -38,7 +38,7 @@
           <tr>
             <th class="rank-col">排名</th>
             <th class="station-col">站点</th>
-            <th class="metric-col" v-for="column in visibleColumns" :key="column.key">
+            <th v-for="column in visibleColumns" :key="column.key" class="metric-col">
               <div class="column-header">
                 <span>{{ column.label }}</span>
                 <button
@@ -61,7 +61,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(station, index) in paginatedData" :key="station.stationId">
+          <tr v-for="station in paginatedData" :key="station.stationId">
             <td class="rank-col">
               <div class="rank-badge" :class="getRankClass(station.ranking)">
                 {{ station.ranking }}
@@ -80,7 +80,7 @@
                 <div class="station-code">{{ station.stationTelecode }}</div>
               </div>
             </td>
-            <td class="metric-col" v-for="column in visibleColumns" :key="column.key">
+            <td v-for="column in visibleColumns" :key="column.key" class="metric-col">
               <div class="metric-value">
                 {{ formatMetric(station[column.key], column.key) }}
               </div>
@@ -126,7 +126,7 @@
     </div>
 
     <!-- 表格分页 -->
-    <div class="table-footer" v-if="showPagination">
+    <div v-if="showPagination" class="table-footer">
       <div class="pagination-info">
         显示 {{ startIndex + 1 }}-{{ endIndex }} 条，共 {{ filteredData.length }} 条
       </div>
@@ -197,14 +197,6 @@ interface TableColumn {
   label: string;
   sortable?: boolean;
   visible?: boolean;
-  formatter?: (value: any) => string;
-}
-
-interface Emits {
-  (e: 'refresh'): void;
-  (e: 'view-details', station: StationRanking): void;
-  (e: 'compare', station: StationRanking): void;
-  (e: 'export'): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -218,7 +210,12 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'desc',
 });
 
-const emit = defineEmits<Emits>();
+const emit = defineEmits<{
+  refresh: []
+  'view-details': [StationRanking]
+  compare: [StationRanking]
+  export: []
+}>();
 
 // 搜索和筛选
 const searchQuery = ref('');
@@ -302,7 +299,7 @@ const visiblePages = computed(() => {
   const pages: number[] = [];
   const maxVisible = 5;
   let start = Math.max(1, currentPage.value - Math.floor(maxVisible / 2));
-  let end = Math.min(totalPages.value, start + maxVisible - 1);
+  const end = Math.min(totalPages.value, start + maxVisible - 1);
 
   if (end - start + 1 < maxVisible) {
     start = Math.max(1, end - maxVisible + 1);
@@ -316,8 +313,9 @@ const visiblePages = computed(() => {
 });
 
 const showEllipsis = computed(() => {
-  return totalPages.value > visiblePages.value.length &&
-    visiblePages.value[visiblePages.value.length - 1] < totalPages.value;
+  const pages = visiblePages.value
+  const lastVisible = pages.length === 0 ? 0 : (pages[pages.length - 1] ?? 0)
+  return totalPages.value > pages.length && lastVisible < totalPages.value
 });
 
 // 方法

@@ -181,7 +181,16 @@ const xAxisLabels = computed(() => {
   if (heatmapData.value.length > 0) {
     return heatmapData.value[0].map(cell => cell.time)
   }
-  return []
+  switch (viewMode.value) {
+    case 'hourly':
+      return ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
+    case 'daily':
+      return ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    case 'weekly':
+      return ['第1周', '第2周', '第3周', '第4周']
+    default:
+      return []
+  }
 })
 
 // Y轴标签
@@ -192,7 +201,16 @@ const yAxisLabels = computed(() => {
   if (heatmapData.value.length > 0) {
     return heatmapData.value.map(row => row[0]?.label || '')
   }
-  return []
+  switch (viewMode.value) {
+    case 'hourly':
+      return ['成都东', '重庆北', '内江北', '资阳北', '永川东']
+    case 'daily':
+      return ['成都东', '重庆北', '内江北', '资阳北', '永川东']
+    case 'weekly':
+      return ['成渝高铁', '渝贵铁路', '成贵高铁', '西成高铁', '渝万铁路']
+    default:
+      return []
+  }
 })
 
 // 工具提示样式
@@ -234,7 +252,7 @@ const getLegendColor = (step: number): string => {
 // 获取图例标签
 const getLegendLabel = (step: number): string => {
   const labels = ['极低', '较低', '中等', '较高', '极高']
-  return labels[step - 1]
+  return labels[step - 1] || ''
 }
 
 // 显示工具提示

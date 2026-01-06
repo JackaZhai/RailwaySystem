@@ -73,7 +73,7 @@ const props = withDefaults(defineProps<{
 })
 
 // 计算图表配置
-const chartOption = computed<EChartsOption>(() => {
+const chartOption = computed(() => {
   const isMultiSeries = props.series && props.series.length > 0
   const xAxisData = props.xAxisData.length > 0
     ? props.xAxisData
@@ -113,30 +113,7 @@ const chartOption = computed<EChartsOption>(() => {
                 formatter: '{c}',
               }
             : undefined,
-          itemStyle: {
-            color: (params: any) => {
-              // 渐变色
-              const colorIndex = params.dataIndex % props.colors.length
-              const color = props.colors[colorIndex] || CHART_CONFIG.COLOR_SCHEME[0]
-              return {
-                type: 'linear',
-                x: 0,
-                y: 0,
-                x2: 0,
-                y2: 1,
-                colorStops: [
-                  {
-                    offset: 0,
-                    color: color,
-                  },
-                  {
-                    offset: 1,
-                    color: `${color}80`, // 80表示50%透明度
-                  },
-                ],
-              }
-            },
-          },
+          colorBy: 'data', 
           barWidth: '60%',
         },
       ]
@@ -208,7 +185,24 @@ const chartOption = computed<EChartsOption>(() => {
         },
       }
 
+  const gradientColors = props.colors.map(color => {
+    const endColor = color.startsWith('#') && color.length <= 7 ? `${color}80` : color
+    return {
+      type: 'linear',
+      x: 0,
+      y: 0,
+      x2: 0,
+      y2: 1,
+      colorStops: [
+        { offset: 0, color: color },
+        { offset: 1, color: endColor },
+      ],
+    }
+  })
+
   return {
+    color: gradientColors,
+
     title: props.title
       ? {
           text: props.title,
@@ -259,6 +253,15 @@ const chartOption = computed<EChartsOption>(() => {
                 bar: '切换为柱状图',
                 line: '切换为折线图',
               },
+              option: {
+                line: {
+                  series: [
+                    {
+                       type: 'line',
+                    }
+                  ]
+                }
+              }
             },
           },
           right: 20,
@@ -271,7 +274,7 @@ const chartOption = computed<EChartsOption>(() => {
     series: seriesData as any,
 
     animation: CHART_CONFIG.ANIMATION as any,
-  }
+  } as unknown as EChartsOption
 })
 
 // Emits

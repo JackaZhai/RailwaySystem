@@ -4,9 +4,9 @@
     <div class="chart-header">
       <div class="chart-title">
         <h3>{{ title }}</h3>
-        <p class="chart-subtitle" v-if="subtitle">{{ subtitle }}</p>
+        <p v-if="subtitle" class="chart-subtitle">{{ subtitle }}</p>
       </div>
-      <div class="chart-actions" v-if="showActions">
+      <div v-if="showActions" class="chart-actions">
         <div class="view-toggle">
           <button
             class="view-btn"
@@ -52,7 +52,7 @@
     ></div>
 
     <!-- 统计信息 -->
-    <div class="chart-stats" v-if="showStats && stats">
+    <div v-if="showStats && stats" class="chart-stats">
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">高峰时段</div>
@@ -78,7 +78,7 @@
     </div>
 
     <!-- 时段分类 -->
-    <div class="time-periods" v-if="showPeriods">
+    <div v-if="showPeriods" class="time-periods">
       <div class="periods-title">时段分类</div>
       <div class="periods-grid">
         <div
@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
 import * as echarts from 'echarts';
 import type { ECharts, EChartsOption } from 'echarts';
 import type { TimeDistribution } from '@/types/passenger';
@@ -131,17 +131,44 @@ const props = withDefaults(defineProps<Props>(), {
 // 引用
 const chartContainer = ref<HTMLElement | null>(null);
 const chartInstance = ref<ECharts | null>(null);
+const resizeObserver = ref<ResizeObserver | null>(null);
 
 // 状态
 const viewMode = ref<'bar' | 'line' | 'area'>('bar');
-const isLoading = ref(false);
+
+const resizeChart = () => {
+  if (!chartInstance.value) return;
+  chartInstance.value.resize();
+};
+
+const scheduleResize = async () => {
+  await nextTick();
+  requestAnimationFrame(() => resizeChart());
+};
+
+const initResizeObserver = () => {
+  if (!chartContainer.value) return;
+  if (typeof ResizeObserver === 'undefined') return;
+
+  resizeObserver.value?.disconnect();
+  resizeObserver.value = new ResizeObserver(() => resizeChart());
+  resizeObserver.value.observe(chartContainer.value);
+};
 
 // 计算属性
-const stats = computed(() => {
-  if (!props.data || props.data.length === 0) return null;
+const effectiveData = computed(() => {
+  const data = props.data ?? [];
+  if (data.length === 0) return [];
+  const nonZero = data.filter(item => item.totalPassengers > 0);
+  return nonZero.length > 0 ? nonZero : data;
+});
 
-  const totalPassengers = props.data.reduce((sum, item) => sum + item.totalPassengers, 0);
-  const avgPassengers = totalPassengers / props.data.length;
+const stats = computed(() => {
+  const data = effectiveData.value;
+  if (data.length === 0) return null;
+
+  const totalPassengers = data.reduce((sum, item) => sum + item.totalPassengers, 0);
+  const avgPassengers = totalPassengers / data.length;
 
   // 找到高峰和低谷时段
   let peakHour = 0;
@@ -149,7 +176,7 @@ const stats = computed(() => {
   let valleyHour = 0;
   let valleyValue = Infinity;
 
-  props.data.forEach(item => {
+  data.forEach(item => {
     if (item.totalPassengers > peakValue) {
       peakValue = item.totalPassengers;
       peakHour = item.hour;
@@ -170,7 +197,8 @@ const stats = computed(() => {
 });
 
 const timePeriods = computed(() => {
-  if (!props.data) return [];
+  const data = effectiveData.value;
+  if (data.length === 0) return [];
 
   // 定义时段
   const periods = [
@@ -181,10 +209,10 @@ const timePeriods = computed(() => {
     { name: '夜间', start: 20, end: 23, class: 'period-night' },
   ];
 
-  const totalPassengers = props.data.reduce((sum, item) => sum + item.totalPassengers, 0);
+  const totalPassengers = data.reduce((sum, item) => sum + item.totalPassengers, 0);
 
   return periods.map(period => {
-    const periodData = props.data!.filter(item =>
+    const periodData = data.filter(item =>
       item.hour >= period.start && item.hour <= period.end
     );
     const passengers = periodData.reduce((sum, item) => sum + item.totalPassengers, 0);
@@ -223,6 +251,7 @@ const initChart = () => {
 
   // 创建新实例
   chartInstance.value = echarts.init(chartContainer.value);
+  initResizeObserver();
 
   // 设置默认配置
   const defaultOptions: EChartsOption = {
@@ -321,27 +350,40 @@ const initChart = () => {
   // 合并自定义配置
   const options = { ...defaultOptions, ...props.customOptions };
   chartInstance.value.setOption(options);
+  scheduleResize();
 
   // 添加resize监听
+  window.removeEventListener('resize', handleResize);
   window.addEventListener('resize', handleResize);
 };
 
 // 更新图表数据
 const updateChartData = () => {
-  if (!chartInstance.value || !props.data) return;
+  if (!chartInstance.value) return;
+  const data = effectiveData.value;
+  if (data.length === 0) return;
 
   // 准备数据
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const nonZeroHours = data
+    .filter(item => item.totalPassengers > 0)
+    .map(item => item.hour)
+    .filter(hour => Number.isFinite(hour))
+    .map(hour => Math.trunc(hour))
+    .filter(hour => hour >= 0 && hour <= 23);
+
+  const uniqueSortedNonZero = Array.from(new Set(nonZeroHours)).sort((a, b) => a - b);
+  const hours = uniqueSortedNonZero.length > 0 ? uniqueSortedNonZero : Array.from({ length: 24 }, (_, i) => i);
+
   const inData = hours.map(hour => {
-    const item = props.data!.find(d => d.hour === hour);
+    const item = data.find(d => d.hour === hour);
     return item ? item.passengersIn : 0;
   });
   const outData = hours.map(hour => {
-    const item = props.data!.find(d => d.hour === hour);
+    const item = data.find(d => d.hour === hour);
     return item ? item.passengersOut : 0;
   });
   const totalData = hours.map(hour => {
-    const item = props.data!.find(d => d.hour === hour);
+    const item = data.find(d => d.hour === hour);
     return item ? item.totalPassengers : 0;
   });
 
@@ -560,7 +602,29 @@ const updateChartData = () => {
   }
 
   // 更新图表配置
+  const showEvery = hours.length <= 12 ? 1 : hours.length <= 18 ? 2 : 3;
   const updateOptions: EChartsOption = {
+    xAxis: {
+      type: 'category',
+      data: hours.map(h => `${h}`),
+      axisLine: {
+        lineStyle: {
+          color: '#dcdfe6',
+        },
+      },
+      axisLabel: {
+        color: '#606266',
+        fontSize: 12,
+        formatter: (value: string) => {
+          const hour = parseInt(value);
+          if (!Number.isFinite(hour)) return value;
+          return hour % showEvery === 0 ? `${hour}:00` : '';
+        },
+      },
+      axisTick: {
+        alignWithLabel: true,
+      },
+    },
     series,
     title: {
       text: props.title,
@@ -586,7 +650,8 @@ const updateChartData = () => {
     },
   };
 
-  chartInstance.value.setOption(updateOptions, true);
+  chartInstance.value.setOption(updateOptions);
+  scheduleResize();
 };
 
 // 处理窗口大小变化
@@ -617,27 +682,31 @@ watch(() => props.data, (newData) => {
   if (newData) {
     updateChartData();
   }
-}, { deep: true });
+}, { deep: true, flush: 'post' });
 
 // 监听视图模式变化
 watch(viewMode, () => {
   if (props.data) {
     updateChartData();
   }
-});
+}, { flush: 'post' });
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
+  await nextTick();
   initChart();
   if (props.data) {
     updateChartData();
   }
+  scheduleResize();
 });
 
 onUnmounted(() => {
   if (chartInstance.value) {
     chartInstance.value.dispose();
   }
+  resizeObserver.value?.disconnect();
+  resizeObserver.value = null;
   window.removeEventListener('resize', handleResize);
 });
 </script>

@@ -85,6 +85,10 @@ export const APP_CONFIG = {
   INFO_COLOR: '#2196f3',
 }
 
+export const DATE_CONFIG = {
+  MAX_RANGE_DAYS: 366,
+}
+
 // 图表配置
 export const CHART_CONFIG = {
   // 默认颜色方案
