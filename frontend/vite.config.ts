@@ -6,8 +6,8 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '')
-  // Default to port 8080 as per start_dev.py
-  const apiTarget = (env.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/api\/?$/, '')
+
+  const backendTarget = (env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/api\/?$/, '')
 
   return {
     plugins: [vue()],
@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // 代理API请求到Django后端
         '/api': {
-          target: apiTarget,
+          target: backendTarget,
           changeOrigin: true,
           // Django后端API路径已经包含/api前缀，所以不需要重写
         },
