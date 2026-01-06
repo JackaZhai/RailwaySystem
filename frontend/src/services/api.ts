@@ -2,12 +2,15 @@ import axios from 'axios'
 
 // API基础配置
 // 使用相对路径，让Vite代理处理
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+const API_BASE_URL = rawBaseUrl.startsWith('http')
+  ? (rawBaseUrl.endsWith('/api') ? rawBaseUrl : `${rawBaseUrl.replace(/\/$/, '')}/api`)
+  : rawBaseUrl
 
 // 创建axios实例
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -47,7 +50,20 @@ import type {
   PassengerFlow,
   PaginatedResponse
 } from '@/types/data'
-import type { TimeDistribution } from '@/types/passenger'
+
+import type {
+  RouteOptFilters,
+  RouteKpi,
+  LineLoadHeatmap,
+  LineLoadTrend,
+  DensityRankResponse,
+  SectionCorridor,
+  TripHeatmap,
+  TimetableScatter,
+  SuggestionList,
+  SuggestionDetail,
+  HubMetrics
+} from '@/types/optimization'
 
 // 数据类型定义
 export interface TimeRange {
@@ -160,7 +176,7 @@ export interface Line {
   efficiency: number
   industryAverage: number
   trend: number
-  status: 'high' | 'medium' | 'low'
+  status?: 'high' | 'medium' | 'low'
 }
 
 export interface KpiData {
@@ -346,125 +362,73 @@ export interface DataValidationDetailedResult {
 // API接口定义
 export const apiService = {
   // KPI数据
-  getKpiData: (timeRange: TimeRange): Promise<KpiData> => {
-    return api.get('/analytics/kpi/', { params: timeRange }) as unknown as Promise<KpiData>
-  },
-
-  // 站点评估数据
-  getStationAssessment: (params: {
-    rangeType?: TimeRange['rangeType']
-    startDate?: string
-    endDate?: string
-  }): Promise<StationAssessmentData[]> => {
-    return api.get('/analytics/stations/', { params }) as unknown as Promise<StationAssessmentData[]>
-  },
-
-  getStationRoleAnalysis: (params: {
-    rangeType?: TimeRange['rangeType']
-    startDate?: string
-    endDate?: string
-    q?: string
-    page?: number
-    page_size?: number
-  }): Promise<StationRoleAnalysisResponse> => {
-    return api.get('/analytics/station-roles/', { params }) as unknown as Promise<StationRoleAnalysisResponse>
-  },
-
-  // 站点繁忙度排名（分页）
-  getBusyRanking: (params: {
-    rangeType?: TimeRange['rangeType']
-    startDate?: string
-    endDate?: string
-    q?: string
-    page?: number
-    page_size?: number
-    wSend?: number
-    wArrive?: number
-    wTransfer?: number
-  }): Promise<BusyRankingResponse> => {
-    return api.get('/analytics/busy-ranking/', { params }) as unknown as Promise<BusyRankingResponse>
-  },
-  
-  // 时间分布数据
-  getTimeDistribution: (params?: { startDate?: string; endDate?: string; stationId?: number | null }): Promise<TimeDistribution[]> => {
-    const requestParams: Record<string, unknown> = {}
-    if (params?.startDate) requestParams.start_date = params.startDate
-    if (params?.endDate) requestParams.end_date = params.endDate
-    if (params?.stationId) requestParams.station_id = params.stationId
-    return api.get('/passenger-flows/time_distribution/', { params: requestParams }) as unknown as Promise<TimeDistribution[]>
-  },
-
-  getHeatmap: (params?: {
-    rangeType?: TimeRange['rangeType']
-    startDate?: string
-    endDate?: string
-  }): Promise<HeatMapCell[][]> => {
-    return api.get('/analytics/heatmap/', { params }) as unknown as Promise<HeatMapCell[][]>
+  getKpiData: (timeRange: TimeRange) => {
+    return api.get<KpiData>('/analytics/kpi/', { params: timeRange }) as unknown as Promise<KpiData>
   },
 
   // ========== 4种核心数据表的CRUD接口 ==========
 
   // 1. 站点数据
-  getStations: (params?: { page?: number; page_size?: number; search?: string }): Promise<PaginatedResponse<Station>> => {
-    return api.get('/stations/', { params }) as unknown as Promise<PaginatedResponse<Station>>
+  getStations: (params?: { page?: number; page_size?: number; search?: string }) => {
+    return api.get<PaginatedResponse<Station>>('/stations/', { params }) as unknown as Promise<PaginatedResponse<Station>>
   },
 
-  getStation: (id: number): Promise<Station> => {
-    return api.get(`/stations/${id}/`) as unknown as Promise<Station>
+  getStation: (id: number) => {
+    return api.get<Station>(`/stations/${id}/`) as unknown as Promise<Station>
   },
 
-  createStation: (data: Partial<Station>): Promise<Station> => {
-    return api.post('/stations/', data) as unknown as Promise<Station>
+  createStation: (data: Partial<Station>) => {
+    return api.post<Station>('/stations/', data) as unknown as Promise<Station>
   },
 
-  updateStation: (id: number, data: Partial<Station>): Promise<Station> => {
-    return api.put(`/stations/${id}/`, data) as unknown as Promise<Station>
+  updateStation: (id: number, data: Partial<Station>) => {
+    return api.put<Station>(`/stations/${id}/`, data) as unknown as Promise<Station>
   },
 
-  deleteStation: (id: number): Promise<unknown> => {
-    return api.delete(`/stations/${id}/`) as unknown as Promise<unknown>
+  deleteStation: (id: number) => {
+    return api.delete(`/stations/${id}/`) as unknown as Promise<any>
   },
 
   // 2. 列车数据
-  getTrains: (params?: { page?: number; page_size?: number; search?: string }): Promise<PaginatedResponse<Train>> => {
-    return api.get('/trains/', { params }) as unknown as Promise<PaginatedResponse<Train>>
+  getTrains: (params?: { page?: number; page_size?: number; search?: string }) => {
+    return api.get<PaginatedResponse<Train>>('/trains/', { params }) as unknown as Promise<PaginatedResponse<Train>>
   },
 
-  getTrain: (id: number): Promise<Train> => {
-    return api.get(`/trains/${id}/`) as unknown as Promise<Train>
+  getTrain: (id: number) => {
+    return api.get<Train>(`/trains/${id}/`) as unknown as Promise<Train>
   },
 
-  createTrain: (data: Partial<Train>): Promise<Train> => {
-    return api.post('/trains/', data) as unknown as Promise<Train>
+  createTrain: (data: Partial<Train>) => {
+    return api.post<Train>('/trains/', data) as unknown as Promise<Train>
   },
 
-  updateTrain: (id: number, data: Partial<Train>): Promise<Train> => {
-    return api.put(`/trains/${id}/`, data) as unknown as Promise<Train>
+  updateTrain: (id: number, data: Partial<Train>) => {
+    return api.put<Train>(`/trains/${id}/`, data) as unknown as Promise<Train>
   },
 
-  deleteTrain: (id: number): Promise<unknown> => {
-    return api.delete(`/trains/${id}/`) as unknown as Promise<unknown>
+  deleteTrain: (id: number) => {
+    return api.delete(`/trains/${id}/`) as unknown as Promise<any>
   },
 
   // 3. 线路数据
-  getRoutes: (params?: { page?: number; page_size?: number; search?: string }): Promise<PaginatedResponse<Route>> => {
-    return api.get('/routes/', { params }) as unknown as Promise<PaginatedResponse<Route>>
+  getRoutes: (params?: { page?: number; page_size?: number; search?: string }) => {
+    return api.get<PaginatedResponse<Route>>('/routes/', { params }) as unknown as Promise<PaginatedResponse<Route>>
   },
 
-  getRoute: (id: number): Promise<Route> => {
-    return api.get(`/routes/${id}/`) as unknown as Promise<Route>
+  getRoute: (id: number) => {
+    return api.get<Route>(`/routes/${id}/`) as unknown as Promise<Route>
   },
 
-  createRoute: (data: Partial<Route>): Promise<Route> => {
-    return api.post('/routes/', data) as unknown as Promise<Route>
+  createRoute: (data: Partial<Route>) => {
+    return api.post<Route>('/routes/', data) as unknown as Promise<Route>
   },
 
-  updateRoute: (id: number, data: Partial<Route>): Promise<Route> => {
-    return api.put(`/routes/${id}/`, data) as unknown as Promise<Route>
+  updateRoute: (id: number, data: Partial<Route>) => {
+    return api.put<Route>(`/routes/${id}/`, data) as unknown as Promise<Route>
   },
 
-  deleteRoute: (id: number): Promise<unknown> => {
-    return api.delete(`/routes/${id}/`) as unknown as Promise<unknown>
+  deleteRoute: (id: number) => {
+    return api.delete(`/routes/${id}/`) as unknown as Promise<any>
   },
 
   // 4. 客运记录数据
@@ -477,29 +441,29 @@ export const apiService = {
     train?: number
     station?: number
     search?: string
-  }): Promise<PaginatedResponse<PassengerFlow>> => {
-    return api.get('/passenger-flows/', { params }) as unknown as Promise<PaginatedResponse<PassengerFlow>>
+  }) => {
+    return api.get<PaginatedResponse<PassengerFlow>>('/passenger-flows/', { params }) as unknown as Promise<PaginatedResponse<PassengerFlow>>
   },
 
-  getPassengerFlow: (id: number): Promise<PassengerFlow> => {
-    return api.get(`/passenger-flows/${id}/`) as unknown as Promise<PassengerFlow>
+  getPassengerFlow: (id: number) => {
+    return api.get<PassengerFlow>(`/passenger-flows/${id}/`) as unknown as Promise<PassengerFlow>
   },
 
-  createPassengerFlow: (data: Partial<PassengerFlow>): Promise<PassengerFlow> => {
-    return api.post('/passenger-flows/', data) as unknown as Promise<PassengerFlow>
+  createPassengerFlow: (data: Partial<PassengerFlow>) => {
+    return api.post<PassengerFlow>('/passenger-flows/', data) as unknown as Promise<PassengerFlow>
   },
 
-  updatePassengerFlow: (id: number, data: Partial<PassengerFlow>): Promise<PassengerFlow> => {
-    return api.put(`/passenger-flows/${id}/`, data) as unknown as Promise<PassengerFlow>
+  updatePassengerFlow: (id: number, data: Partial<PassengerFlow>) => {
+    return api.put<PassengerFlow>(`/passenger-flows/${id}/`, data) as unknown as Promise<PassengerFlow>
   },
 
-  deletePassengerFlow: (id: number): Promise<unknown> => {
-    return api.delete(`/passenger-flows/${id}/`) as unknown as Promise<unknown>
+  deletePassengerFlow: (id: number) => {
+    return api.delete(`/passenger-flows/${id}/`) as unknown as Promise<any>
   },
 
   // 热力图数据
-  getHeatMapData: (timeRange: TimeRange): Promise<HeatMapData> => {
-    return api.get('/analytics/heatmap/', { params: timeRange }) as unknown as Promise<HeatMapData>
+  getHeatMapData: (timeRange: TimeRange) => {
+    return api.get<HeatMapData>('/analytics/heatmap/', { params: timeRange }) as unknown as Promise<HeatMapData>
   },
 
   // 流向图数据
@@ -512,23 +476,6 @@ export const apiService = {
     return api.get('/analytics/trend/', {
       params: { ...timeRange, frequency }
     }) as unknown as Promise<TrendData[]>
-  },
-
-  // 线路负载数据
-  getLines: (timeRange: TimeRange) => {
-    return api.get<any[]>('/analytics/line-loads/', { params: timeRange }).then((res: any) => {
-      return res.map((item: any) => ({
-        id: item.lineId,
-        name: item.lineName,
-        code: item.lineCode,
-        occupancyRate: item.occupancyRate,
-        loadRate: item.loadRate,
-        efficiency: item.efficiency,
-        industryAverage: 75, // Backend doesn't return this yet
-        trend: item.trend,
-        status: item.occupancyRate > 80 ? 'high' : item.occupancyRate > 60 ? 'medium' : 'low'
-      }))
-    })
   },
 
   // 时段数据
@@ -546,13 +493,7 @@ export const apiService = {
       totalPages: number
     }>('/analytics/trains/', {
       params: { ...timeRange, page, page_size: pageSize }
-    }) as unknown as Promise<{
-      data: TrainRecord[]
-      total: number
-      page: number
-      pageSize: number
-      totalPages: number
-    }>
+    })
   },
 
   // 数据刷新
@@ -573,6 +514,53 @@ export const apiService = {
     return api.get('/analytics/forecast/', {
       params: { ...timeRange, days }
     })
+  },
+
+  // 线路优化接口
+  getRouteOptKpi: (filters: RouteOptFilters) => {
+    return api.post<RouteKpi>('/route-opt/kpi/', filters)
+  },
+
+  getLineLoadHeatmap: (filters: RouteOptFilters) => {
+    return api.post<LineLoadHeatmap>('/route-opt/line-load/heatmap/', filters)
+  },
+
+  getLineLoadTrend: (filters: RouteOptFilters) => {
+    return api.post<LineLoadTrend>('/route-opt/line-load/trend/', filters)
+  },
+
+  getDensityRank: (filters: RouteOptFilters) => {
+    return api.post<DensityRankResponse>('/route-opt/density/rank/', filters)
+  },
+
+  getSectionCorridor: (filters: RouteOptFilters & { lineId?: string }) => {
+    return api.post<SectionCorridor>('/route-opt/section-load/corridor/', filters)
+  },
+
+  getTripHeatmap: (filters: RouteOptFilters & { lineId?: string }) => {
+    return api.post<TripHeatmap>('/route-opt/trip-load/heatmap/', filters)
+  },
+
+  getTimetableScatter: (filters: RouteOptFilters & { lineId?: string }) => {
+    return api.post<TimetableScatter>('/route-opt/timetable/demand-scatter/', filters)
+  },
+
+  getSuggestionList: (payload: {
+    filters: RouteOptFilters
+    types?: string[]
+    sortBy?: string
+    page?: number
+    pageSize?: number
+  }) => {
+    return api.post<SuggestionList>('/route-opt/suggestions/list/', payload)
+  },
+
+  getSuggestionDetail: (id: string) => {
+    return api.get<SuggestionDetail>(`/route-opt/suggestions/${id}/`)
+  },
+
+  getHubMetrics: (filters: RouteOptFilters) => {
+    return api.post<HubMetrics>('/route-opt/hubs/metrics/', filters)
   },
 
   // 数据管理接口
@@ -671,7 +659,6 @@ export const apiService = {
     }>('/data/stats/') as unknown as Promise<{
       totalRecords: number
       stations: number
-      trains?: number
       lines: number
       dateRange: { minDate: string; maxDate: string }
       recentUploads: Array<{
@@ -928,19 +915,6 @@ export const mockService = {
     return data
   },
 
-  getTimePeriodData: async (_timeRange: TimeRange): Promise<TimePeriodData[]> => {
-    await new Promise(resolve => setTimeout(resolve, 300))
-    void _timeRange
-
-    return [
-      { id: 1, name: '凌晨', time: '00:00-06:00', passengers: 12800, percentage: 0.06, trains: 24 },
-      { id: 2, name: '早高峰', time: '07:00-09:00', passengers: 62400, percentage: 0.29, trains: 96 },
-      { id: 3, name: '日间', time: '10:00-16:00', passengers: 75200, percentage: 0.35, trains: 168 },
-      { id: 4, name: '晚高峰', time: '17:00-19:00', passengers: 52800, percentage: 0.24, trains: 84 },
-      { id: 5, name: '夜间', time: '20:00-23:00', passengers: 12800, percentage: 0.06, trains: 36 }
-    ]
-  },
-
   // 数据管理模拟接口
   uploadData: async (file: File, options?: { validateOnly?: boolean }): Promise<DataUploadResponse> => {
     await new Promise(resolve => setTimeout(resolve, 1500))
@@ -993,9 +967,9 @@ export const mockService = {
         id,
         timestamp: date.toISOString(),
         stationId: stationIndex + 1,
-        stationName: stations[stationIndex] ?? '',
+        stationName: stations[stationIndex] || '',
         lineId: lineIndex + 1,
-        lineName: lines[lineIndex] ?? '',
+        lineName: lines[lineIndex] || '',
         passengersIn: Math.floor(Math.random() * 500) + 100,
         passengersOut: Math.floor(Math.random() * 500) + 100,
         direction: Math.random() > 0.5 ? 'inbound' : 'outbound',
@@ -1105,6 +1079,7 @@ export const mockService = {
   }
 }
 
+// 强制使用真实API
 export const dataService = apiService
 
 export default api
