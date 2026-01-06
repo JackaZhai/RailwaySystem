@@ -124,6 +124,11 @@ class PassengerFlow(models.Model):
             models.Index(fields=['route', 'operation_date']),
             models.Index(fields=['station', 'operation_date']),
             models.Index(fields=['train']),
+            models.Index(fields=['train', 'operation_date']),
+            models.Index(fields=['start_station_telecode', 'operation_date']),
+            models.Index(fields=['end_station_telecode', 'operation_date']),
+            models.Index(fields=['operation_date', 'arrival_time']),
+            models.Index(fields=['operation_date', 'departure_time']),
         ]
         ordering = ['-operation_date', 'route', 'train', 'station']
 

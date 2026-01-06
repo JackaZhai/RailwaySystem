@@ -77,7 +77,7 @@
           <div class="stats-card">
             <div class="stats-value">{{ formatNumber(totalPassengers) }}</div>
             <div class="stats-label">总客流量</div>
-            <div class="stats-detail">今日累计</div>
+            <div class="stats-detail">{{ dateRangeLabel }}</div>
           </div>
           <div class="stats-card">
             <div class="stats-value">{{ peakStation.name }}</div>
@@ -87,7 +87,7 @@
           <div class="stats-card">
             <div class="stats-value">{{ avgPassengersPerStation.toLocaleString() }}</div>
             <div class="stats-label">站点平均客流</div>
-            <div class="stats-detail">今日平均</div>
+            <div class="stats-detail">{{ dateRangeLabel }}</div>
           </div>
           <div class="stats-card">
             <div class="stats-value">{{ growthRate }}%</div>
@@ -108,8 +108,8 @@
                 class="line-item"
               >
                 <div class="line-info">
-                  <div class="line-name">{{ line.name }}</div>
-                  <div class="line-code">{{ line.code }}</div>
+                  <div class="line-name">{{ line.code || line.name }}</div>
+                  <div class="line-code">{{ line.name || line.code }}</div>
                 </div>
                 <div class="line-metrics">
                   <div class="metric">
@@ -123,6 +123,10 @@
                   <div class="metric">
                     <span class="metric-label">满载率：</span>
                     <span class="metric-value">{{ line.loadRate }}%</span>
+                  </div>
+                  <div class="metric">
+                    <span class="metric-label">运营效率：</span>
+                    <span class="metric-value">{{ line.efficiency }}%</span>
                   </div>
                 </div>
                 <div class="line-progress">
@@ -221,7 +225,7 @@
     <div class="analysis-footer">
       <div class="footer-info">
         <span class="info-label">数据更新时间：</span>
-        <span class="info-value">{{ lastUpdateTime }}</span>
+        <span class="info-value">{{ lastUpdateTime }} (v2.0)</span>
       </div>
       <div class="footer-actions">
         <button class="footer-btn" @click="refreshData">
@@ -245,7 +249,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import api from '@/services/api'
 
 interface StationData {
   id: number
@@ -266,6 +271,7 @@ interface LineData {
   totalPassengers: number
   occupancyRate: number
   loadRate: number
+  efficiency: number
   trend: number
 }
 
@@ -280,6 +286,8 @@ interface TimePeriod {
 
 const props = withDefaults(defineProps<{
   title?: string
+  startDate?: string
+  endDate?: string
 }>(), {
   title: '客流量分析'
 })
@@ -291,32 +299,20 @@ const analysisType = ref<'stations' | 'lines' | 'time'>('stations')
 const selectedMetric = ref<'total' | 'inbound' | 'outbound' | 'transfer'>('total')
 
 // 站点数据
-const topStations = ref<StationData[]>([
-  { id: 1, name: '成都东站', code: 'CDW', total: 125678, inbound: 65432, outbound: 60246, transfer: 0, percentage: 100, trend: 12.5 },
-  { id: 2, name: '重庆北站', code: 'CUW', total: 98765, inbound: 51234, outbound: 47531, transfer: 0, percentage: 78, trend: 8.3 },
-  { id: 3, name: '内江北站', code: 'NKW', total: 65432, inbound: 34567, outbound: 30865, transfer: 0, percentage: 52, trend: 5.8 },
-  { id: 4, name: '资阳北站', code: 'ZYW', total: 54321, inbound: 28765, outbound: 25556, transfer: 0, percentage: 43, trend: 3.2 },
-  { id: 5, name: '永川东站', code: 'YCW', total: 43210, inbound: 23456, outbound: 19754, transfer: 0, percentage: 34, trend: 7.1 }
-])
+const topStations = ref<StationData[]>([])
 
 // 线路数据
-const lineData = ref<LineData[]>([
-  { id: 1, name: '成渝高铁', code: 'CYG', totalPassengers: 245678, occupancyRate: 92, loadRate: 85, trend: 15.2 },
-  { id: 2, name: '渝贵铁路', code: 'YGR', totalPassengers: 187654, occupancyRate: 78, loadRate: 72, trend: 8.7 },
-  { id: 3, name: '成贵高铁', code: 'CGG', totalPassengers: 156789, occupancyRate: 65, loadRate: 58, trend: 6.3 },
-  { id: 4, name: '西成高铁', code: 'XCG', totalPassengers: 123456, occupancyRate: 45, loadRate: 42, trend: -2.1 },
-  { id: 5, name: '渝万铁路', code: 'YWR', totalPassengers: 98765, occupancyRate: 82, loadRate: 76, trend: 11.4 }
-])
+const lineData = ref<LineData[]>([])
 
 // 时段数据
-const timePeriods = ref<TimePeriod[]>([
-  { id: 1, name: '早高峰', time: '07:00-09:00', passengers: 45678, percentage: 35, trains: 45 },
-  { id: 2, name: '上午平峰', time: '09:00-12:00', passengers: 34567, percentage: 27, trains: 38 },
-  { id: 3, name: '午间高峰', time: '12:00-14:00', passengers: 23456, percentage: 18, trains: 32 },
-  { id: 4, name: '下午平峰', time: '14:00-17:00', passengers: 19876, percentage: 15, trains: 28 },
-  { id: 5, name: '晚高峰', time: '17:00-19:00', passengers: 54321, percentage: 42, trains: 48 },
-  { id: 6, name: '夜间', time: '19:00-24:00', passengers: 12345, percentage: 10, trains: 22 }
-])
+const timePeriods = ref<TimePeriod[]>([])
+
+const dateRangeLabel = computed(() => {
+  if (props.startDate && props.endDate) {
+    return `${props.startDate} 至 ${props.endDate}`
+  }
+  return '今日累计'
+})
 
 // 统计数据
 const totalPassengers = computed(() => {
@@ -342,7 +338,7 @@ const peakStation = computed(() => {
 })
 
 const growthRate = computed(() => {
-  return 8.7 // 模拟数据
+  return 0
 })
 
 const peakPeriod = computed(() => {
@@ -418,14 +414,108 @@ const changeAnalysisType = (type: 'stations' | 'lines' | 'time') => {
 }
 
 // 刷新数据
-const refreshData = () => {
+const refreshData = async () => {
   console.log('刷新客流量分析数据')
-  // 这里将调用API获取最新数据
+  await fetchData()
 }
+
+const fetchData = async () => {
+  try {
+    const params = {
+      start_date: props.startDate,
+      end_date: props.endDate,
+      _t: new Date().getTime()
+    }
+
+    console.log('Fetching analytics data in parallel with params:', params)
+
+    // 并行请求所有数据
+    const results = await Promise.allSettled([
+      api.get<any[]>('/passenger-flows/station_ranking/', { params }),
+      api.get<any[]>('/analytics/line-loads/', { params }),
+      api.get<any[]>('/analytics/time-periods/', { params: { ...params, granularity: 'period' } })
+    ])
+
+    const stationRes = results[0].status === 'fulfilled' ? results[0].value : []
+    const lineRes = results[1].status === 'fulfilled' ? results[1].value : []
+    const timeRes = results[2].status === 'fulfilled' ? results[2].value : []
+
+    if (results[0].status === 'rejected') {
+      console.error('Station ranking加载失败:', results[0].reason)
+    }
+    if (results[1].status === 'rejected') {
+      console.error('Line loads加载失败:', results[1].reason)
+    }
+    if (results[2].status === 'rejected') {
+      console.error('Time periods加载失败:', results[2].reason)
+    }
+
+    // 1. Process Station Data
+    console.log('Station response:', stationRes)
+    if (Array.isArray(stationRes)) {
+      const maxTotal = stationRes.length > 0 ? stationRes[0].total_passengers : 1
+      topStations.value = stationRes.slice(0, 5).map((item: any) => ({
+        id: item.station_id,
+        name: item.station_name,
+        code: item.station_telecode,
+        total: item.total_passengers,
+        inbound: item.passengers_in,
+        outbound: item.passengers_out,
+        transfer: 0,
+        percentage: Math.round((item.total_passengers / maxTotal) * 100),
+        trend: item.trend || 0
+      }))
+    } else {
+      topStations.value = []
+    }
+
+    // 2. Process Line Data
+    if (Array.isArray(lineRes)) {
+      lineData.value = lineRes.map((item: any) => ({
+        id: item.lineId,
+        name: item.lineName,
+        code: item.lineCode,
+        totalPassengers: item.totalPassengers,
+        occupancyRate: item.occupancyRate,
+        loadRate: item.loadRate,
+        efficiency: item.efficiency,
+        trend: item.trend || 0
+      }))
+    } else {
+      lineData.value = []
+    }
+
+    // 3. Process Time Period Data
+    if (Array.isArray(timeRes)) {
+      timePeriods.value = timeRes.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        time: item.time,
+        passengers: item.passengers,
+        percentage: item.percentage,
+        trains: item.trains
+      }))
+    } else {
+      timePeriods.value = []
+    }
+
+  } catch (error) {
+    console.error('Failed to fetch analytics data:', error)
+  }
+}
+
+// 监听日期变化
+watch(() => [props.startDate, props.endDate], ([newStart, newEnd]) => {
+  if (newStart && newEnd) {
+    fetchData()
+  }
+})
 
 // 初始化
 onMounted(() => {
-  // 可以在这里加载真实数据
+  if (props.startDate && props.endDate) {
+    fetchData()
+  }
 })
 </script>
 
