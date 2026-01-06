@@ -24,16 +24,6 @@ export default [
 
   // JavaScript基础配置
   js.configs.recommended,
-  {
-    files: ['**/*.{js,mjs,cjs}'],
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.es2021,
-        ...globals.node
-      }
-    }
-  },
 
   // TypeScript配置
   {

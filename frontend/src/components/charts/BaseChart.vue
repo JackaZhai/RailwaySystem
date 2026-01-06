@@ -71,11 +71,11 @@ const initChart = () => {
     )
 
     // 设置图表选项（添加动画配置）
-    const animatedOption: EChartsOption = {
+    const animatedOption = {
       ...props.option,
       animation: true,
       animationDuration: 1000,
-      animationEasing: 'cubicOut' as const,
+      animationEasing: 'cubicOut',
       animationThreshold: 2000,
     }
 
@@ -142,11 +142,11 @@ const updateChart = (newOption: EChartsOption) => {
 
   try {
     // 添加动画配置
-    const animatedOption: EChartsOption = {
+    const animatedOption = {
       ...newOption,
       animation: true,
       animationDuration: 800,
-      animationEasing: 'cubicOut' as const,
+      animationEasing: 'cubicOut',
     }
 
     chartInstance.value.setOption(animatedOption, {

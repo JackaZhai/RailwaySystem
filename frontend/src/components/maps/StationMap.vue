@@ -90,7 +90,7 @@
             </div>
             <div class="legend-item">
               <div class="legend-marker small"></div>
-              <span>低客流量 (&lt;5万)</span>
+              <span>低客流量 (<5万)</span>
             </div>
           </div>
         </div>

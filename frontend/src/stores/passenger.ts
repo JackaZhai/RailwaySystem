@@ -3,7 +3,7 @@
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { format, subDays, differenceInCalendarDays } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from 'date-fns';
 import type {
   AnalysisRequest,
   FlowTrendData,

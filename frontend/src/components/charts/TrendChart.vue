@@ -93,7 +93,7 @@
                 :cy="point.y"
                 r="4"
                 class="data-point total"
-                @mouseenter="showTooltip(index)"
+                @mouseenter="showTooltip('total', index)"
                 @mouseleave="hideTooltip"
               />
             </svg>
@@ -249,7 +249,7 @@ const yAxisLabels = computed(() => {
 })
 
 // 统计数据
-const stats = computed<Stats>(() => {
+const stats = computed(() => {
   const data = trendData.value
   if (data.length === 0) {
     return {
@@ -263,12 +263,7 @@ const stats = computed<Stats>(() => {
   const totalTrend = 0
 
   // 找到高峰时段
-  const peakData = data.reduce<TrendData>((max, d) => (d.total > max.total ? d : max), {
-    time: '',
-    total: 0,
-    inbound: 0,
-    outbound: 0
-  })
+  const peakData = data.reduce((max, d) => d.total > max.total ? d : max, data[0])
 
   return {
     total,
@@ -326,9 +321,8 @@ const formatNumber = (num: number): string => {
 }
 
 // 显示工具提示
-const showTooltip = (index: number) => {
+const showTooltip = (_type: 'total', index: number) => {
   const data = trendData.value[index]
-  if (!data) return
   tooltip.value = {
     visible: true,
     time: data.time,

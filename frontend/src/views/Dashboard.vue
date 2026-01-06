@@ -346,18 +346,16 @@ const timeRangeLabel = computed(() => {
   switch (selectedRange.value) {
     case 'today':
       return now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
-    case 'week': {
+    case 'week':
       const weekStart = new Date(now.setDate(now.getDate() - now.getDay()))
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekStart.getDate() + 6)
       return `${weekStart.getMonth() + 1}月${weekStart.getDate()}日 - ${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`
-    }
     case 'month':
       return `${now.getMonth() + 1}月`
-    case 'quarter': {
+    case 'quarter':
       const quarter = Math.floor(now.getMonth() / 3) + 1
       return `第${quarter}季度`
-    }
     case 'year':
       return `${now.getFullYear()}年`
     default:
@@ -372,11 +370,10 @@ const timeRangeDuration = computed(() => {
       return '1天'
     case 'week':
       return '7天'
-    case 'month': {
+    case 'month':
       const now = getBaseDate()
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
       return `${daysInMonth}天`
-    }
     case 'quarter':
       return '约90天'
     case 'year':
@@ -403,36 +400,32 @@ const selectTimeRange = (range: typeof selectedRange.value) => {
       startDate.value = now.toISOString().split('T')[0]
       endDate.value = now.toISOString().split('T')[0]
       break
-    case 'week': {
+    case 'week':
       const weekStart = new Date(now.setDate(now.getDate() - now.getDay()))
       startDate.value = weekStart.toISOString().split('T')[0]
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekStart.getDate() + 6)
       endDate.value = weekEnd.toISOString().split('T')[0]
       break
-    }
-    case 'month': {
+    case 'month':
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
       startDate.value = monthStart.toISOString().split('T')[0]
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
       endDate.value = monthEnd.toISOString().split('T')[0]
       break
-    }
-    case 'quarter': {
+    case 'quarter':
       const quarter = Math.floor(now.getMonth() / 3)
       const quarterStart = new Date(now.getFullYear(), quarter * 3, 1)
       startDate.value = quarterStart.toISOString().split('T')[0]
       const quarterEnd = new Date(now.getFullYear(), (quarter + 1) * 3, 0)
       endDate.value = quarterEnd.toISOString().split('T')[0]
       break
-    }
-    case 'year': {
+    case 'year':
       const yearStart = new Date(now.getFullYear(), 0, 1)
       startDate.value = yearStart.toISOString().split('T')[0]
       const yearEnd = new Date(now.getFullYear(), 11, 31)
       endDate.value = yearEnd.toISOString().split('T')[0]
       break
-    }
     case 'custom':
       // 保持当前日期选择
       break

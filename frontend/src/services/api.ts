@@ -2,15 +2,12 @@ import axios from 'axios'
 
 // API基础配置
 // 使用相对路径，让Vite代理处理
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
-const API_BASE_URL = rawBaseUrl.startsWith('http')
-  ? (rawBaseUrl.endsWith('/api') ? rawBaseUrl : `${rawBaseUrl.replace(/\/$/, '')}/api`)
-  : rawBaseUrl
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // 创建axios实例
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -51,132 +48,11 @@ import type {
   PaginatedResponse
 } from '@/types/data'
 
-import type {
-  RouteOptFilters,
-  RouteKpi,
-  LineLoadHeatmap,
-  LineLoadTrend,
-  DensityRankResponse,
-  SectionCorridor,
-  TripHeatmap,
-  TimetableScatter,
-  SuggestionList,
-  SuggestionDetail,
-  HubMetrics
-} from '@/types/optimization'
-
 // 数据类型定义
 export interface TimeRange {
   startDate: string
   endDate: string
   rangeType: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'
-}
-
-export interface StationSummary {
-  id: number
-  name: string
-  code: string
-  latitude: number
-  longitude: number
-  todayPassengers: number
-  totalPassengers: number
-  occupancyRate: number
-  departures: number
-  arrivals: number
-  delayRate: number
-  connectedLines: string[]
-}
-
-export interface StationAssessmentData {
-  id: number
-  name: string
-  totalFlow: number
-  inboundRatio: number
-  outboundRatio: number
-  peakFlow: number
-  peakHour?: string
-  routeCount?: number
-  transferPotential?: string
-  platformCount: number
-  designCapacity: number
-  saturation: number
-  roleType: string
-  roleName: string
-}
-
-export interface BusyRankingItem {
-  rank: number
-  stationId: number
-  stationName: string
-  stationTelecode?: string | null
-  send: number
-  arrive: number
-  transfer: number
-  busyIndex: number
-  peakHour?: string | null
-  peakHours?: string[]
-}
-
-export interface BusyRankingResponse {
-  count: number
-  page: number
-  pageSize: number
-  results: BusyRankingItem[]
-}
-
-export interface StationRoleDistributionItem {
-  roleType: string
-  roleName: string
-  count: number
-  percent: number
-}
-
-export interface StationRoleItem {
-  id: number
-  name: string
-  telecode?: string | null
-  totalFlow: number
-  totalIn: number
-  totalOut: number
-  transfer: number
-  routeCount: number
-  startRouteCount: number
-  endRouteCount: number
-  endpointOut: number
-  endpointIn: number
-  endpointTotal: number
-  inboundRatio: number
-  outboundRatio: number
-  endpointInboundRatio: number
-  endpointOutboundRatio: number
-  roleType: string
-  roleName: string
-}
-
-export interface StationRoleAnalysisResponse {
-  summary: {
-    rangeType: string
-    startDate: string | null
-    endDate: string | null
-    totalStations: number
-  }
-  distribution: StationRoleDistributionItem[]
-  count: number
-  page: number
-  pageSize: number
-  results: StationRoleItem[]
-}
-
-export interface Line {
-  id: number
-  name: string
-  code: string
-  occupancyRate: number
-  loadRate: number
-  efficiency: number
-  industryAverage: number
-  trend: number
-  status?: 'high' | 'medium' | 'low'
 }
 
 export interface KpiData {
@@ -192,16 +68,23 @@ export interface KpiData {
   }
 }
 
+export interface Line {
+  id: number
+  name: string
+  code: string
+  occupancyRate: number
+  loadRate: number
+  efficiency: number
+  industryAverage: number
+  trend: number
+  status?: 'high' | 'medium' | 'low'
+}
+
+
 export interface HeatMapData {
   stations: string[]
   times: string[]
   data: number[][]
-}
-
-export interface HeatMapCell {
-  value: number
-  time: string
-  label: string
 }
 
 export interface FlowData {
@@ -467,20 +350,37 @@ export const apiService = {
   },
 
   // 流向图数据
-  getFlowData: (timeRange: TimeRange): Promise<FlowData[]> => {
-    return api.get('/analytics/flow/', { params: timeRange }) as unknown as Promise<FlowData[]>
+  getFlowData: (timeRange: TimeRange) => {
+    return api.get<FlowData[]>('/analytics/flow/', { params: timeRange })
   },
 
   // 趋势数据
   getTrendData: (timeRange: TimeRange, frequency: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
-    return api.get('/analytics/trend/', {
+    return api.get<TrendData[]>('/analytics/trend/', {
       params: { ...timeRange, frequency }
-    }) as unknown as Promise<TrendData[]>
+    })
+  },
+
+  // 线路负载数据
+  getLines: (timeRange: TimeRange) => {
+    return api.get<any[]>('/analytics/line-loads/', { params: timeRange }).then((res: any) => {
+      return res.map((item: any) => ({
+        id: item.lineId,
+        name: item.lineName,
+        code: item.lineCode,
+        occupancyRate: item.occupancyRate,
+        loadRate: item.loadRate,
+        efficiency: item.efficiency,
+        industryAverage: 75, // Backend doesn't return this yet
+        trend: item.trend,
+        status: item.occupancyRate > 80 ? 'high' : item.occupancyRate > 60 ? 'medium' : 'low'
+      }))
+    })
   },
 
   // 时段数据
-  getTimePeriodData: (timeRange: TimeRange): Promise<TimePeriodData[]> => {
-    return api.get('/analytics/time-periods/', { params: timeRange }) as unknown as Promise<TimePeriodData[]>
+  getTimePeriodData: (timeRange: TimeRange) => {
+    return api.get<TimePeriodData[]>('/analytics/time-periods/', { params: timeRange })
   },
 
   // 实时列车数据
@@ -493,7 +393,13 @@ export const apiService = {
       totalPages: number
     }>('/analytics/trains/', {
       params: { ...timeRange, page, page_size: pageSize }
-    })
+    }) as unknown as Promise<{
+      data: TrainRecord[]
+      total: number
+      page: number
+      pageSize: number
+      totalPages: number
+    }>
   },
 
   // 数据刷新
@@ -516,51 +422,14 @@ export const apiService = {
     })
   },
 
-  // 线路优化接口
-  getRouteOptKpi: (filters: RouteOptFilters) => {
-    return api.post<RouteKpi>('/route-opt/kpi/', filters)
-  },
-
-  getLineLoadHeatmap: (filters: RouteOptFilters) => {
-    return api.post<LineLoadHeatmap>('/route-opt/line-load/heatmap/', filters)
-  },
-
-  getLineLoadTrend: (filters: RouteOptFilters) => {
-    return api.post<LineLoadTrend>('/route-opt/line-load/trend/', filters)
-  },
-
-  getDensityRank: (filters: RouteOptFilters) => {
-    return api.post<DensityRankResponse>('/route-opt/density/rank/', filters)
-  },
-
-  getSectionCorridor: (filters: RouteOptFilters & { lineId?: string }) => {
-    return api.post<SectionCorridor>('/route-opt/section-load/corridor/', filters)
-  },
-
-  getTripHeatmap: (filters: RouteOptFilters & { lineId?: string }) => {
-    return api.post<TripHeatmap>('/route-opt/trip-load/heatmap/', filters)
-  },
-
-  getTimetableScatter: (filters: RouteOptFilters & { lineId?: string }) => {
-    return api.post<TimetableScatter>('/route-opt/timetable/demand-scatter/', filters)
-  },
-
-  getSuggestionList: (payload: {
-    filters: RouteOptFilters
-    types?: string[]
-    sortBy?: string
-    page?: number
-    pageSize?: number
-  }) => {
-    return api.post<SuggestionList>('/route-opt/suggestions/list/', payload)
-  },
-
-  getSuggestionDetail: (id: string) => {
-    return api.get<SuggestionDetail>(`/route-opt/suggestions/${id}/`)
-  },
-
-  getHubMetrics: (filters: RouteOptFilters) => {
-    return api.post<HubMetrics>('/route-opt/hubs/metrics/', filters)
+  // 线路负载分析 (New)
+  loadAnalysis: {
+    getOverview: (params: any) => api.get('/analytics/load-analysis/overview/', { params }) as unknown as Promise<any>,
+    getHeatmap: (params: any) => api.get('/analytics/load-analysis/heatmap/', { params }) as unknown as Promise<any>,
+    getBottleneck: (params: any) => api.get('/analytics/load-analysis/bottleneck/', { params }) as unknown as Promise<any>,
+    getLineProfile: (params: any) => api.get('/analytics/load-analysis/line_profile/', { params }) as unknown as Promise<any>,
+    getStationPressure: (params: any) => api.get('/analytics/load-analysis/station_pressure/', { params }) as unknown as Promise<any>,
+    getSegments: (params: any) => api.get('/analytics/load-analysis/segments/', { params }) as unknown as Promise<any>,
   },
 
   // 数据管理接口
@@ -575,7 +444,7 @@ export const apiService = {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
-    }) as unknown as Promise<DataUploadResponse>
+    })
   },
 
   // 数据查询
@@ -607,7 +476,7 @@ export const apiService = {
       backendParams.sortOrder = params.sortOrder
     }
 
-    return api.get<DataQueryResult>('/data/records/', { params: backendParams }) as unknown as Promise<DataQueryResult>
+    return api.get<DataQueryResult>('/data/records/', { params: backendParams })
   },
 
   // 数据验证
@@ -618,7 +487,7 @@ export const apiService = {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
-    }) as unknown as Promise<DataValidationResult>
+    })
   },
 
   // 数据清理
@@ -627,7 +496,7 @@ export const apiService = {
     removeInvalid?: boolean
     dateRange?: { startDate: string; endDate: string }
   }) => {
-    return api.post<DataCleanupResult>('/data/cleanup/', options) as unknown as Promise<DataCleanupResult>
+    return api.post<DataCleanupResult>('/data/cleanup/', options)
   },
 
   // 批量删除
@@ -648,7 +517,6 @@ export const apiService = {
     return api.get<{
       totalRecords: number
       stations: number
-      trains?: number
       lines: number
       dateRange: { minDate: string; maxDate: string }
       recentUploads: Array<{
@@ -681,29 +549,9 @@ export const mockService = {
     const baseRevenue = 8765432
 
     // 根据时间范围调整数据
-    const resolveCustomDays = () => {
-      if (!timeRange.startDate || !timeRange.endDate) return 1
-      const start = new Date(timeRange.startDate)
-      const end = new Date(timeRange.endDate)
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1
-      const startMs = Math.min(start.getTime(), end.getTime())
-      const endMs = Math.max(start.getTime(), end.getTime())
-      const diffDays = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1
-      return Math.max(diffDays, 1)
-    }
-
-    const factor =
-      timeRange.rangeType === 'today'
-        ? 1
-        : timeRange.rangeType === 'week'
-          ? 7
-          : timeRange.rangeType === 'month'
-            ? 30
-            : timeRange.rangeType === 'quarter'
-              ? 90
-              : timeRange.rangeType === 'year'
-                ? 365
-                : resolveCustomDays()
+    const factor = timeRange.rangeType === 'today' ? 1 :
+                   timeRange.rangeType === 'week' ? 7 :
+                   timeRange.rangeType === 'month' ? 30 : 1
 
     return {
       totalPassengers: Math.round(basePassengers * factor),
@@ -719,10 +567,9 @@ export const mockService = {
     }
   },
 
-  getStations: async (_timeRange: TimeRange): Promise<StationSummary[]> => {
+  getStations: async (timeRange: TimeRange): Promise<Station[]> => {
     // 模拟服务中timeRange参数未使用，但在真实API中会使用
     await new Promise(resolve => setTimeout(resolve, 300))
-    void _timeRange
 
     return [
       {
@@ -798,10 +645,9 @@ export const mockService = {
     ]
   },
 
-  getLines: async (_timeRange: TimeRange): Promise<Line[]> => {
+  getLines: async (timeRange: TimeRange): Promise<Line[]> => {
     // 模拟服务中timeRange参数未使用，但在真实API中会使用
     await new Promise(resolve => setTimeout(resolve, 300))
-    void _timeRange
 
     return [
       {
@@ -862,10 +708,9 @@ export const mockService = {
     ]
   },
 
-  getTrendData: async (_timeRange: TimeRange, frequency: 'hourly' | 'daily' | 'weekly' | 'monthly'): Promise<TrendData[]> => {
+  getTrendData: async (timeRange: TimeRange, frequency: 'hourly' | 'daily' | 'weekly' | 'monthly'): Promise<TrendData[]> => {
     // 模拟服务中timeRange参数未使用，但在真实API中会使用
     await new Promise(resolve => setTimeout(resolve, 400))
-    void _timeRange
 
     const count = frequency === 'hourly' ? 24 :
                   frequency === 'daily' ? 7 :
@@ -885,23 +730,21 @@ export const mockService = {
       const inbound = Math.round(baseInbound * timeFactor * dayFactor * randomFactor * 0.9)
       const outbound = Math.round(baseOutbound * timeFactor * dayFactor * randomFactor * 1.1)
 
-    let time = ''
-    switch (frequency) {
-      case 'hourly':
-        time = `${i.toString().padStart(2, '0')}:00`
-        break
-      case 'daily':
-        {
-          const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-          time = days[i % 7] ?? ''
+      let time = ''
+      switch (frequency) {
+        case 'hourly':
+          time = `${i.toString().padStart(2, '0')}:00`
           break
-        }
-      case 'weekly':
-        time = `第${i + 1}周`
-        break
-      case 'monthly':
-        time = `${i + 1}月`
-        break
+        case 'daily':
+          const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+          time = days[i % 7]
+          break
+        case 'weekly':
+          time = `第${i + 1}周`
+          break
+        case 'monthly':
+          time = `${i + 1}月`
+          break
       }
 
       data.push({
@@ -988,9 +831,8 @@ export const mockService = {
     }
   },
 
-  validateData: async (_file: File): Promise<DataValidationResult> => {
+  validateData: async (file: File): Promise<DataValidationResult> => {
     await new Promise(resolve => setTimeout(resolve, 1200))
-    void _file
 
     const recordCount = Math.floor(Math.random() * 1000) + 500
     const errorCount = Math.floor(Math.random() * 5)

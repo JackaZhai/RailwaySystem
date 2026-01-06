@@ -12,7 +12,7 @@
 
     <div class="test-section">
       <h2>测试2: API调用</h2>
-      <button :disabled="loading" @click="testApi">测试API</button>
+      <button @click="testApi" :disabled="loading">测试API</button>
       <div v-if="apiResult">
         <p>API响应: {{ apiResult }}</p>
       </div>

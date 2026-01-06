@@ -1,5 +1,5 @@
 <template>
-  <div class="skeleton-loader" :class="[type, skeletonClass, { 'animate': animate }]">
+  <div class="skeleton-loader" :class="[type, { 'animate': animate }]">
     <!-- 卡片类型 -->
     <div v-if="type === 'card'" class="skeleton-card">
       <div class="skeleton-header">
