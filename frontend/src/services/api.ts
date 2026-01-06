@@ -575,16 +575,6 @@ export const apiService = {
     })
   },
 
-  // 线路负载分析 (New)
-  loadAnalysis: {
-    getOverview: (params: any) => api.get('/analytics/load-analysis/overview/', { params }) as unknown as Promise<any>,
-    getHeatmap: (params: any) => api.get('/analytics/load-analysis/heatmap/', { params }) as unknown as Promise<any>,
-    getBottleneck: (params: any) => api.get('/analytics/load-analysis/bottleneck/', { params }) as unknown as Promise<any>,
-    getLineProfile: (params: any) => api.get('/analytics/load-analysis/line_profile/', { params }) as unknown as Promise<any>,
-    getStationPressure: (params: any) => api.get('/analytics/load-analysis/station_pressure/', { params }) as unknown as Promise<any>,
-    getSegments: (params: any) => api.get('/analytics/load-analysis/segments/', { params }) as unknown as Promise<any>,
-  },
-
   // 数据管理接口
   // 数据上传
   uploadData: (file: File, options?: { validateOnly?: boolean }) => {
