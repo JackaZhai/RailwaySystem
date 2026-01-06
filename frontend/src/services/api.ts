@@ -7,7 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 // 创建axios实例
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 增加超时时间到30秒，适应大量数据分析
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -175,7 +175,6 @@ export interface KpiData {
     totalRevenue: number
   }
 }
-
 
 export interface HeatMapData {
   stations: string[]
@@ -515,6 +514,23 @@ export const apiService = {
     }) as unknown as Promise<TrendData[]>
   },
 
+  // 线路负载数据
+  getLines: (timeRange: TimeRange) => {
+    return api.get<any[]>('/analytics/line-loads/', { params: timeRange }).then((res: any) => {
+      return res.map((item: any) => ({
+        id: item.lineId,
+        name: item.lineName,
+        code: item.lineCode,
+        occupancyRate: item.occupancyRate,
+        loadRate: item.loadRate,
+        efficiency: item.efficiency,
+        industryAverage: 75, // Backend doesn't return this yet
+        trend: item.trend,
+        status: item.occupancyRate > 80 ? 'high' : item.occupancyRate > 60 ? 'medium' : 'low'
+      }))
+    })
+  },
+
   // 时段数据
   getTimePeriodData: (timeRange: TimeRange): Promise<TimePeriodData[]> => {
     return api.get('/analytics/time-periods/', { params: timeRange }) as unknown as Promise<TimePeriodData[]>
@@ -557,6 +573,16 @@ export const apiService = {
     return api.get('/analytics/forecast/', {
       params: { ...timeRange, days }
     })
+  },
+
+  // 线路负载分析 (New)
+  loadAnalysis: {
+    getOverview: (params: any) => api.get('/analytics/load-analysis/overview/', { params }) as unknown as Promise<any>,
+    getHeatmap: (params: any) => api.get('/analytics/load-analysis/heatmap/', { params }) as unknown as Promise<any>,
+    getBottleneck: (params: any) => api.get('/analytics/load-analysis/bottleneck/', { params }) as unknown as Promise<any>,
+    getLineProfile: (params: any) => api.get('/analytics/load-analysis/line_profile/', { params }) as unknown as Promise<any>,
+    getStationPressure: (params: any) => api.get('/analytics/load-analysis/station_pressure/', { params }) as unknown as Promise<any>,
+    getSegments: (params: any) => api.get('/analytics/load-analysis/segments/', { params }) as unknown as Promise<any>,
   },
 
   // 数据管理接口

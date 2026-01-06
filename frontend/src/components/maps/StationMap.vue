@@ -36,6 +36,7 @@
     </div>
     <div class="map-container">
       <div class="map-background" :style="mapStyle">
+        <div v-if="visibleStations.length === 0" class="map-empty">暂无站点数据</div>
         <!-- 地图网格 -->
         <div class="map-grid">
           <div v-for="i in gridLines" :key="i" class="grid-line"></div>
@@ -262,18 +263,15 @@ const gridLines = computed(() => {
 
 // 可见的站点
 const visibleStations = computed(() => {
-  if (props.stations.length > 0) {
-    return props.stations
-  }
-  return generateMockStations()
+  return props.stations
 })
 
 // 可见的连接线
 const visibleConnections = computed(() => {
-  if (props.connections.length > 0) {
-    return calculateConnectionLines(props.connections)
+  if (props.connections.length === 0) {
+    return []
   }
-  return calculateConnectionLines(generateMockConnections())
+  return calculateConnectionLines(props.connections)
 })
 
 // 选中的站点
@@ -288,111 +286,6 @@ const tooltipStyle = computed(() => ({
   top: `${tooltip.value.y}px`
 }))
 
-// 生成模拟站点数据
-const generateMockStations = (): Station[] => {
-  return [
-    {
-      id: 1,
-      name: '成都东站',
-      code: 'CDW',
-      x: 30,
-      y: 40,
-      todayPassengers: 125678,
-      totalPassengers: 4567890,
-      occupancyRate: 92,
-      departures: 156,
-      arrivals: 148,
-      delayRate: 98,
-      connectedLines: ['成渝高铁', '成贵高铁', '西成高铁']
-    },
-    {
-      id: 2,
-      name: '重庆北站',
-      code: 'CUW',
-      x: 60,
-      y: 60,
-      todayPassengers: 98765,
-      totalPassengers: 3456789,
-      occupancyRate: 88,
-      departures: 142,
-      arrivals: 135,
-      delayRate: 96,
-      connectedLines: ['成渝高铁', '渝贵铁路', '渝万铁路']
-    },
-    {
-      id: 3,
-      name: '内江北站',
-      code: 'NKW',
-      x: 40,
-      y: 50,
-      todayPassengers: 65432,
-      totalPassengers: 2345678,
-      occupancyRate: 78,
-      departures: 98,
-      arrivals: 95,
-      delayRate: 97,
-      connectedLines: ['成渝高铁', '内昆铁路']
-    },
-    {
-      id: 4,
-      name: '资阳北站',
-      code: 'ZYW',
-      x: 35,
-      y: 45,
-      todayPassengers: 54321,
-      totalPassengers: 1234567,
-      occupancyRate: 65,
-      departures: 76,
-      arrivals: 72,
-      delayRate: 99,
-      connectedLines: ['成渝高铁']
-    },
-    {
-      id: 5,
-      name: '永川东站',
-      code: 'YCW',
-      x: 55,
-      y: 55,
-      todayPassengers: 43210,
-      totalPassengers: 987654,
-      occupancyRate: 72,
-      departures: 65,
-      arrivals: 68,
-      delayRate: 98,
-      connectedLines: ['成渝高铁']
-    },
-    {
-      id: 6,
-      name: '荣昌北站',
-      code: 'RCW',
-      x: 50,
-      y: 58,
-      todayPassengers: 32109,
-      totalPassengers: 876543,
-      occupancyRate: 58,
-      departures: 54,
-      arrivals: 56,
-      delayRate: 99,
-      connectedLines: ['成渝高铁']
-    }
-  ]
-}
-
-// 生成模拟连接数据
-const generateMockConnections = (): Connection[] => {
-  return [
-    { id: 1, fromStationId: 1, toStationId: 2, intensity: 'high' },
-    { id: 2, fromStationId: 2, toStationId: 1, intensity: 'high' },
-    { id: 3, fromStationId: 1, toStationId: 3, intensity: 'medium' },
-    { id: 4, fromStationId: 3, toStationId: 1, intensity: 'medium' },
-    { id: 5, fromStationId: 1, toStationId: 4, intensity: 'low' },
-    { id: 6, fromStationId: 4, toStationId: 1, intensity: 'low' },
-    { id: 7, fromStationId: 2, toStationId: 5, intensity: 'medium' },
-    { id: 8, fromStationId: 5, toStationId: 2, intensity: 'medium' },
-    { id: 9, fromStationId: 2, toStationId: 6, intensity: 'low' },
-    { id: 10, fromStationId: 6, toStationId: 2, intensity: 'low' }
-  ]
-}
 
 // 计算连接线坐标
 const calculateConnectionLines = (connections: Connection[]) => {
@@ -542,6 +435,19 @@ onMounted(() => {
   overflow: hidden;
   border-radius: var(--border-radius-base);
   background-color: var(--color-bg-secondary);
+}
+
+.map-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  background: rgba(255, 255, 255, 0.9);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--border-radius-full);
+  z-index: 2;
 }
 
 .map-background {

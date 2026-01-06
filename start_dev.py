@@ -54,8 +54,7 @@ def check_dependencies():
 
     # 检查npm
     try:
-        use_shell = sys.platform == 'win32'
-        subprocess.run(["npm", "--version"], capture_output=True, check=True, shell=use_shell)
+        subprocess.run(["npm", "--version"], capture_output=True, check=True)
         print("  ✅ npm可用")
     except Exception as e:
         print(f"  ❌ npm不可用: {e}")
@@ -80,22 +79,17 @@ def start_backend(backend_dir):
     """启动后端服务器"""
     print("\n🚀 启动后端Django服务器...")
 
-    # 切换到后端目录
-    os.chdir(backend_dir)
-
-    backend_host = "127.0.0.1" if sys.platform == "win32" else "0.0.0.0"
-    candidate_ports = [8080, 8000, 8081, 8001, 9000]
-
     backend_proc = None
     backend_port = None
-    last_output = None
 
+    candidate_ports = [8080, 8000]
     for port in candidate_ports:
-        if not is_port_available(backend_host, port):
+        if not is_port_available("0.0.0.0", port):
             continue
 
         backend_proc = subprocess.Popen(
-            [sys.executable, "manage.py", "runserver", f"{backend_host}:{port}"],
+            [sys.executable, "manage.py", "runserver", f"0.0.0.0:{port}"],
+            cwd=str(backend_dir),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -103,26 +97,25 @@ def start_backend(backend_dir):
             universal_newlines=True
         )
 
-        backend_port = port
-        print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: {backend_port})")
+        print(f"  后端服务器启动中 (PID: {backend_proc.pid}, 端口: {port})")
 
         print("⏳ 等待后端服务器启动...")
         time.sleep(3)
 
         if backend_proc.poll() is None:
+            backend_port = port
             break
 
-        output, _ = backend_proc.communicate()
-        last_output = output
-        backend_proc = None
-        backend_port = None
-
-    if backend_proc is None or backend_port is None:
+    # 检查后端是否在运行
+    if backend_proc is None or backend_port is None or backend_proc.poll() is not None:
         print("❌ 错误: 后端服务器启动失败")
-        if last_output:
-            print("后端输出:")
-            print(last_output[:500])
-        return None, None
+        # 打印输出
+        if backend_proc is not None:
+            output, _ = backend_proc.communicate()
+            if output:
+                print("后端输出:")
+                print(output[:500])  # 只打印前500字符
+        return None
 
     # 测试后端API
     print("🔍 测试后端API连接...")
@@ -144,18 +137,16 @@ def start_frontend(frontend_dir, backend_port):
     """启动前端服务器"""
     print("\n🚀 启动前端Vite开发服务器...")
 
-    # 切换到前端目录
-    os.chdir(frontend_dir)
-
     # 检查node_modules
-    use_shell = sys.platform == 'win32'
-    if not os.path.exists("node_modules"):
+    node_modules_path = Path(frontend_dir) / "node_modules"
+    if not node_modules_path.exists():
         print("📦 未找到node_modules，正在安装依赖...")
         install_proc = subprocess.run(
             ["npm", "install"],
+            cwd=str(frontend_dir),
+            shell=(os.name == 'nt'),
             capture_output=True,
-            text=True,
-            shell=use_shell
+            text=True
         )
         if install_proc.returncode != 0:
             print("❌ npm install 失败")
@@ -169,13 +160,13 @@ def start_frontend(frontend_dir, backend_port):
 
     frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
+        cwd=str(frontend_dir),
+        env=child_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        universal_newlines=True,
-        shell=use_shell,
-        env=child_env
+        universal_newlines=True
     )
 
     print(f"  前端服务器启动中 (PID: {frontend_proc.pid})")
@@ -187,25 +178,9 @@ def start_frontend(frontend_dir, backend_port):
     # 检查前端是否在运行
     if frontend_proc.poll() is not None:
         print("❌ 错误: 前端服务器启动失败")
-        # 打印输出
-        output, _ = frontend_proc.communicate()
-        if output:
-            print("前端输出:")
-            print(output[:500])  # 只打印前500字符
         return None
 
-    # 检查端口
-    frontend_port = 5173
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("localhost", frontend_port))
-        sock.close()
-        # 端口可用，但Vite可能用了其他端口
-        print(f"⚠️  端口 {frontend_port} 可用，但Vite可能使用了其他端口")
-        print(f"   请检查Vite输出确认实际端口")
-    except:
-        print(f"✅ 前端服务器运行在端口: {frontend_port}")
+    print("✅ 前端服务器已启动（端口以 Vite 输出为准）")
 
     return frontend_proc
 
@@ -295,6 +270,6 @@ def main():
         traceback.print_exc()
         cleanup(backend_proc, frontend_proc)
         sys.exit(1)
-
+        
 if __name__ == "__main__":
     main()

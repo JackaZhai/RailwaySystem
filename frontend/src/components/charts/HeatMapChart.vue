@@ -2,7 +2,7 @@
   <div class="heatmap-chart">
     <div class="chart-header">
       <h3 class="chart-title">{{ title }}</h3>
-      <div class="chart-actions">
+      <div v-if="!hasCustomLabels" class="chart-actions">
         <button
           class="action-btn"
           :class="{ active: viewMode === 'hourly' }"
@@ -27,6 +27,8 @@
       </div>
     </div>
     <div class="chart-container">
+      <div v-if="heatmapData.length === 0" class="chart-empty">暂无热力图数据</div>
+      <template v-else>
       <div class="heatmap-grid">
         <!-- Y轴标签 -->
         <div class="y-axis">
@@ -89,6 +91,7 @@
           </div>
         </div>
       </div>
+      </template>
     </div>
 
     <!-- 工具提示 -->
@@ -140,9 +143,13 @@ interface TooltipData {
 const props = withDefaults(defineProps<{
   title?: string
   data?: HeatMapCell[][]
+  xLabels?: string[]
+  yLabels?: string[]
 }>(), {
   title: '客流热力图',
-  data: () => []
+  data: () => [],
+  xLabels: () => [],
+  yLabels: () => []
 })
 
 // 视图模式
@@ -161,18 +168,18 @@ const tooltip = ref<TooltipData>({
 
 // 热力图数据
 const heatmapData = computed(() => {
-  if (props.data.length > 0) {
-    return props.data
-  }
-
-  // 生成模拟数据
-  return generateMockData()
+  return props.data || []
 })
+
+const hasCustomLabels = computed(() => props.xLabels.length > 0 || props.yLabels.length > 0)
 
 // X轴标签
 const xAxisLabels = computed(() => {
-  if (props.data.length > 0 && props.data[0]?.length) {
-    return props.data[0].map(cell => cell.time)
+  if (props.xLabels.length > 0) {
+    return props.xLabels
+  }
+  if (heatmapData.value.length > 0) {
+    return heatmapData.value[0].map(cell => cell.time)
   }
   switch (viewMode.value) {
     case 'hourly':
@@ -188,10 +195,11 @@ const xAxisLabels = computed(() => {
 
 // Y轴标签
 const yAxisLabels = computed(() => {
-  if (props.data.length > 0) {
-    return props.data
-      .map(row => row[0]?.label)
-      .filter((label): label is string => Boolean(label))
+  if (props.yLabels.length > 0) {
+    return props.yLabels
+  }
+  if (heatmapData.value.length > 0) {
+    return heatmapData.value.map(row => row[0]?.label || '')
   }
   switch (viewMode.value) {
     case 'hourly':
@@ -210,50 +218,6 @@ const tooltipStyle = computed(() => ({
   left: `${tooltip.value.x}px`,
   top: `${tooltip.value.y}px`
 }))
-
-// 生成模拟数据
-const generateMockData = (): HeatMapCell[][] => {
-  const rows = yAxisLabels.value.length
-  const cols = xAxisLabels.value.length
-  const data: HeatMapCell[][] = []
-
-  for (let i = 0; i < rows; i++) {
-    const row: HeatMapCell[] = []
-    for (let j = 0; j < cols; j++) {
-      const baseValue = 1000 + Math.random() * 5000
-      const timeFactor = j < 2 ? 0.3 : j < 4 ? 0.7 : 1.0
-      const stationFactor = i < 2 ? 1.2 : i < 4 ? 0.8 : 1.0
-      const value = Math.round(baseValue * timeFactor * stationFactor)
-
-      let time = ''
-      let label = ''
-
-      switch (viewMode.value) {
-        case 'hourly':
-          time = `${xAxisLabels.value[j]}`
-          label = `${yAxisLabels.value[i]}站`
-          break
-        case 'daily':
-          time = `${xAxisLabels.value[j]}`
-          label = `${yAxisLabels.value[i]}站`
-          break
-        case 'weekly':
-          time = `${xAxisLabels.value[j]}`
-          label = `${yAxisLabels.value[i]}`
-          break
-      }
-
-      row.push({
-        value,
-        time,
-        label
-      })
-    }
-    data.push(row)
-  }
-
-  return data
-}
 
 // 获取单元格颜色
 const getCellColor = (value: number): string => {
@@ -314,6 +278,9 @@ const hideTooltip = () => {
 
 // 切换视图模式
 const changeViewMode = (mode: 'hourly' | 'daily' | 'weekly') => {
+  if (hasCustomLabels.value) {
+    return
+  }
   viewMode.value = mode
 }
 
@@ -374,6 +341,15 @@ onMounted(() => {
 
 .chart-container {
   position: relative;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .heatmap-grid {

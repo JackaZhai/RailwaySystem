@@ -8,7 +8,7 @@ export interface Station {
   id: number
   travel_area_id: number | null
   name: string
-  code: number | null
+  code: string | null
   telecode: string
   shortname: string | null
   created_at: string

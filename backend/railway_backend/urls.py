@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from data_management import views as data_views
+from analytics import views as analytics_views
 
 router = routers.DefaultRouter()
 router.register(r'stations', data_views.StationViewSet)
@@ -25,17 +26,32 @@ router.register(r'trains', data_views.TrainViewSet)
 router.register(r'routes', data_views.RouteViewSet)
 router.register(r'route-stations', data_views.RouteStationViewSet)
 router.register(r'passenger-flows', data_views.PassengerFlowViewSet)
+router.register(r'analytics/load-analysis', analytics_views.LoadAnalysisViewSet, basename='load-analysis')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include(router.urls)),
+    # 数据管理API（放在 router 之前，避免 /api/ 前缀解析时被拦截）
+    path('api/data/stats/', data_views.DataStatsView.as_view(), name='data-stats'),
+    path('api/data/records/', data_views.DataRecordsView.as_view(), name='data-records'),
+    path('api/data/export/', data_views.data_export, name='data-export'),
+    path('api/data/upload/', data_views.DataUploadView.as_view(), name='data-upload'),
+
+    # 客流分析API
     path('api/analytics/flow/', data_views.FlowAnalysisView.as_view(), name='flow-analysis'),
-    path('api/analytics/heatmap/', data_views.HeatMapView.as_view(), name='heatmap'),
-    path('api/analytics/kpi/', data_views.KpiView.as_view(), name='kpi'),
+    path('api/analytics/kpi/', data_views.AnalyticsKpiView.as_view(), name='analytics-kpi'),
+    path('api/analytics/heatmap/', data_views.AnalyticsHeatmapView.as_view(), name='analytics-heatmap'),
+    path('api/analytics/trend/', data_views.AnalyticsTrendView.as_view(), name='analytics-trend'),
+    path('api/analytics/time-periods/', data_views.AnalyticsTimePeriodsView.as_view(), name='analytics-time-periods'),
+    path('api/analytics/line-loads/', data_views.AnalyticsLineLoadsView.as_view(), name='analytics-line-loads'),
+    path('api/analytics/map/', data_views.AnalyticsMapView.as_view(), name='analytics-map'),
+    path('api/analytics/trains/', data_views.AnalyticsTrainsView.as_view(), name='analytics-trains'),
+    path('api/analytics/refresh/', data_views.AnalyticsRefreshView.as_view(), name='analytics-refresh'),
+    path('api/analytics/export/', data_views.AnalyticsExportView.as_view(), name='analytics-export'),
+    path('api/analytics/forecast/', data_views.AnalyticsForecastView.as_view(), name='analytics-forecast'),
+
+    # 站点评估API
     path('api/analytics/stations/', data_views.StationAssessmentView.as_view(), name='station-assessment'),
     path('api/analytics/station-roles/', data_views.StationRoleAnalysisView.as_view(), name='station-role-analysis'),
     path('api/analytics/busy-ranking/', data_views.BusyRankingView.as_view(), name='busy-ranking'),
-    # 数据管理API
-    path('api/data/stats/', data_views.DataStatsView.as_view(), name='data-stats'),
-    path('api/data/records/', data_views.DataRecordsView.as_view(), name='data-records'),
+    path('api/', include(router.urls)),
 ]

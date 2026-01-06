@@ -15,20 +15,19 @@ import type {
   FlowAnomaly,
   ComparisonData,
   HeatmapData,
+  TimePeriodData,
+  FlowLineData,
   ExportOptions
 } from '@/types/passenger';
 
-// API基础URL
-// 在开发模式下使用相对路径，通过Vite代理
-// 在生产模式下使用完整URL
-const API_BASE_URL = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api')
-  : '/api';
+// API基础URL：优先使用环境变量，其次按环境回退
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+  || (import.meta.env.PROD ? 'http://localhost:8000/api' : '/api');
 
 // 创建axios实例
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -83,20 +82,23 @@ export const passengerService = {
       // 调用Django客流分析API
       const response = await apiClient.post('/analytics/flow/', params);
       const backendData = response.data as any;
+      const items = Array.isArray(backendData)
+        ? backendData
+        : (backendData?.data || []);
 
       // 转换数据格式以匹配前端类型
       const flowTrendData: FlowTrendData = {
         granularity: params.timeGranularity || 'day',
-        data: backendData.data.map((item: any) => ({
+        data: items.map((item: any) => ({
           time: item.time_period,
           value: item.total_passengers,
           category: '总客流量'
         })),
-        total: backendData.data.reduce((sum: number, item: any) => sum + item.total_passengers, 0),
-        average: backendData.data.length > 0 ?
-          backendData.data.reduce((sum: number, item: any) => sum + item.total_passengers, 0) / backendData.data.length : 0,
-        max: Math.max(...backendData.data.map((item: any) => item.total_passengers)),
-        min: Math.min(...backendData.data.map((item: any) => item.total_passengers))
+        total: items.reduce((sum: number, item: any) => sum + item.total_passengers, 0),
+        average: items.length > 0 ?
+          items.reduce((sum: number, item: any) => sum + item.total_passengers, 0) / items.length : 0,
+        max: items.length > 0 ? Math.max(...items.map((item: any) => item.total_passengers)) : 0,
+        min: items.length > 0 ? Math.min(...items.map((item: any) => item.total_passengers)) : 0
       };
 
       return flowTrendData;
@@ -115,6 +117,8 @@ export const passengerService = {
       const queryParams = new URLSearchParams();
       if (params.startDate) queryParams.append('start_date', params.startDate);
       if (params.endDate) queryParams.append('end_date', params.endDate);
+      // 添加时间戳防止缓存
+      queryParams.append('_t', Date.now().toString());
 
       const response = await apiClient.get(`/passenger-flows/station_ranking/?${queryParams}`);
       const backendData = response.data as any[];
@@ -139,47 +143,32 @@ export const passengerService = {
   },
 
   /**
-   * 获取线路负载分析 - 暂时使用模拟数据
+   * 获取线路负载分析 - 基于后端线路与客运记录计算
    */
   async getLineLoads(params: AnalysisRequest): Promise<LineLoadData[]> {
     try {
-      // 从Django获取线路数据
-      const routesResponse = await apiClient.get('/routes/');
-      const routesData = routesResponse.data as any;
-      const routes = routesData.results || routesData;
-
-      // 获取客运记录汇总来计算负载
-      const queryParams = new URLSearchParams();
-      if (params.startDate) queryParams.append('start_date', params.startDate);
-      if (params.endDate) queryParams.append('end_date', params.endDate);
-
-      const flowsResponse = await apiClient.get(`/passenger-flows/?${queryParams}`);
-      const flowsData = flowsResponse.data as any;
-      const flows = flowsData.results || flowsData;
-
-      // 按线路分组计算负载
-      const lineLoads: LineLoadData[] = routes.map((route: any) => {
-        const routeFlows = flows.filter((flow: any) => flow.route === route.id);
-        const totalPassengers = routeFlows.reduce((sum: number, flow: any) =>
-          sum + (flow.passengers_in || 0) + (flow.passengers_out || 0), 0);
-
-        // 获取线路站点数量
-        const routeStations = flows.filter((flow: any) => flow.route === route.id)
-          .map((flow: any) => flow.station)
-          .filter((value: any, index: number, self: any[]) => self.indexOf(value) === index);
-
-        return {
-          lineId: route.id,
-          lineName: route.name || `线路 ${route.code}`,
-          totalPassengers,
-          capacity: 10000, // 模拟运力
-          loadRate: totalPassengers / 10000,
-          stations: routeStations.length,
-          avgPassengersPerStation: routeStations.length > 0 ? totalPassengers / routeStations.length : 0
-        };
+      const response = await apiClient.get('/analytics/line-loads/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds,
+          _t: Date.now()
+        }
       });
+      const items = response.data as any[];
 
-      return lineLoads;
+      return (items || []).map((item: any) => ({
+        lineId: item.lineId,
+        lineName: item.lineName,
+        lineCode: item.lineCode,
+        totalPassengers: item.totalPassengers,
+        capacity: item.capacity,
+        loadRate: item.loadRate,
+        stations: item.stations,
+        avgPassengersPerStation: item.avgPassengersPerStation
+      }));
     } catch (error) {
       console.error('获取线路负载失败:', error);
       throw error;
@@ -195,6 +184,8 @@ export const passengerService = {
       const queryParams = new URLSearchParams();
       if (params.startDate) queryParams.append('start_date', params.startDate);
       if (params.endDate) queryParams.append('end_date', params.endDate);
+      // 添加时间戳防止缓存
+      queryParams.append('_t', Date.now().toString());
 
       const response = await apiClient.get(`/passenger-flows/time_distribution/?${queryParams}`);
       const backendData = response.data as any[];
@@ -216,41 +207,61 @@ export const passengerService = {
   },
 
   /**
-   * 获取空间分布分析（用于地图）- 暂时使用模拟数据
+   * 获取时间段统计 - 使用Django时段分析API
    */
-  async getSpatialDistribution(params: AnalysisRequest): Promise<SpatialDistribution[]> {
+  async getTimePeriods(
+    params: AnalysisRequest,
+    granularity: 'hourly' | 'daily' | 'weekly' | 'period' = 'period'
+  ): Promise<TimePeriodData[]> {
     try {
-      // 获取站点排名数据
-      const stationRankings = await this.getStationRankings(params);
-
-      // 模拟地理坐标（实际项目中应从数据库获取）
-      const spatialDistribution: SpatialDistribution[] = stationRankings.slice(0, 20).map((station) => {
-        // 为前20个站点生成模拟坐标（成都-重庆区域）
-        const baseLat = 30.6595; // 成都纬度
-        const baseLng = 104.0659; // 成都经度
-        const lat = baseLat + (Math.random() - 0.5) * 2;
-        const lng = baseLng + (Math.random() - 0.5) * 2;
-
-        // 根据客流量计算半径和颜色
-        const radius = Math.max(5, Math.min(30, station.totalPassengers / 10000));
-        const color = station.totalPassengers > 50000 ? '#ff4d4f' :
-                     station.totalPassengers > 20000 ? '#faad14' : '#52c41a';
-
-        return {
-          stationId: station.stationId,
-          stationName: station.stationName,
-          stationTelecode: station.stationTelecode,
-          latitude: lat,
-          longitude: lng,
-          totalPassengers: station.totalPassengers,
-          passengersIn: station.passengersIn,
-          passengersOut: station.passengersOut,
-          radius,
-          color
-        };
+      const response = await apiClient.get('/analytics/time-periods/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds,
+          granularity,
+          _t: Date.now()
+        }
       });
 
-      return spatialDistribution;
+      return (response.data || []) as TimePeriodData[];
+    } catch (error) {
+      console.error('获取时间段统计失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 获取空间分布分析（用于地图）- 后端暂无坐标数据
+   */
+  async getSpatialDistribution(_params: AnalysisRequest): Promise<SpatialDistribution[]> {
+    try {
+      const response = await apiClient.get('/analytics/map/', {
+        params: {
+          startDate: _params.startDate,
+          endDate: _params.endDate,
+          stationIds: _params.stationIds,
+          lineIds: _params.lineIds,
+          trainIds: _params.trainIds,
+          _t: Date.now()
+        }
+      });
+
+      const stations = (response.data as any)?.stations || [];
+      return stations.map((item: any) => ({
+        stationId: item.stationId ?? item.id,
+        stationName: item.stationName ?? item.name,
+        stationTelecode: item.stationTelecode ?? item.telecode,
+        latitude: item.latitude ?? item.lat,
+        longitude: item.longitude ?? item.lng,
+        totalPassengers: item.totalPassengers ?? 0,
+        passengersIn: item.passengersIn ?? 0,
+        passengersOut: item.passengersOut ?? 0,
+        radius: 0,
+        color: ''
+      }));
     } catch (error) {
       console.error('获取空间分布失败:', error);
       throw error;
@@ -258,38 +269,31 @@ export const passengerService = {
   },
 
   /**
-   * 获取客流预测 - 暂时使用模拟数据
+   * 获取客流预测 - 使用Django预测API
    */
-  async getFlowForecast(params: AnalysisRequest): Promise<FlowForecast[]> {
+  async getFlowForecast(params: AnalysisRequest, days: number = 7): Promise<FlowForecast[]> {
     try {
-      // 获取历史数据用于预测
-      const trends = await this.getFlowTrends(params);
+      const response = await apiClient.get('/analytics/forecast/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          days,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
+        }
+      });
 
-      // 生成未来7天的预测数据
-      const forecastData: FlowForecast[] = [];
-      const lastDate = new Date(params.endDate);
-      const avgValue = trends.average;
-
-      for (let i = 1; i <= 7; i++) {
-        const forecastDate = new Date(lastDate);
-        forecastDate.setDate(forecastDate.getDate() + i);
-
-        // 模拟预测值（基于平均值加上随机波动）
-        const baseValue = avgValue;
-        const randomFactor = 0.8 + Math.random() * 0.4; // 0.8-1.2的随机因子
-        const forecastValue = baseValue * randomFactor;
-        const confidence = 0.85 + Math.random() * 0.1; // 85-95%置信度
-
-        forecastData.push({
-          timestamp: toISODate(forecastDate),
-          forecast: forecastValue,
-          lowerBound: forecastValue * (1 - 0.1 * (1 - confidence)),
-          upperBound: forecastValue * (1 + 0.1 * (1 - confidence)),
-          confidence
-        });
-      }
-
-      return forecastData;
+      const items = response.data as any[];
+      return (items || []).map((item: any) => ({
+        timestamp: item.timestamp,
+        actual: item.actual,
+        forecast: item.forecast,
+        lowerBound: item.lowerBound,
+        upperBound: item.upperBound,
+        confidence: item.confidence
+      }));
     } catch (error) {
       console.error('获取客流预测失败:', error);
       throw error;
@@ -300,73 +304,15 @@ export const passengerService = {
    * 获取实时客流数据 - 暂时使用模拟数据
    */
   async getRealTimeFlows(): Promise<RealTimeFlow[]> {
-    try {
-      // 模拟实时数据
-      const stations = await this.getStations();
-      const realTimeFlows: RealTimeFlow[] = stations.slice(0, 10).map((station) => {
-        const currentPassengers = Math.floor(Math.random() * 1000) + 500;
-        const capacity = 2000;
-        const occupancyRate = currentPassengers / capacity;
-        const trends: ('up' | 'down' | 'stable')[] = ['up', 'down', 'stable'];
-        const trend = trends[Math.floor(Math.random() * 3)] ?? 'stable';
-
-        return {
-          stationId: station.id,
-          stationName: station.name,
-          currentPassengers,
-          capacity,
-          occupancyRate,
-          lastUpdate: new Date().toISOString(),
-          trend
-        };
-      });
-
-      return realTimeFlows;
-    } catch (error) {
-      console.error('获取实时客流失败:', error);
-      throw error;
-    }
+    return [];
   },
 
   /**
-   * 获取客流异常检测 - 暂时使用模拟数据
+   * 获取客流异常检测 - 暂无后端接口
    */
   async getFlowAnomalies(_params: AnalysisRequest): Promise<FlowAnomaly[]> {
-    try {
-      void _params
-      // 模拟异常检测数据
-      const stations = await this.getStations();
-      if (stations.length === 0) return [];
-      const anomalies: FlowAnomaly[] = [];
-
-      // 随机生成1-3个异常
-      const numAnomalies = Math.floor(Math.random() * 3) + 1;
-      for (let i = 0; i < numAnomalies; i++) {
-        const station = stations[Math.floor(Math.random() * stations.length)];
-        if (!station) continue;
-        const expectedValue = Math.floor(Math.random() * 1000) + 500;
-        const actualValue = expectedValue * (1.5 + Math.random() * 0.5); // 150-200%的偏差
-        const deviation = ((actualValue - expectedValue) / expectedValue) * 100;
-        const severity: ('low' | 'medium' | 'high')[] = ['low', 'medium', 'high'];
-
-        anomalies.push({
-          id: i + 1,
-          timestamp: new Date().toISOString(),
-          stationId: station.id,
-          stationName: station.name,
-          expectedValue,
-          actualValue,
-          deviation,
-          severity: severity[Math.floor(Math.random() * 3)] ?? 'low',
-          description: `站点 ${station.name} 客流量异常偏高`
-        });
-      }
-
-      return anomalies;
-    } catch (error) {
-      console.error('获取客流异常失败:', error);
-      throw error;
-    }
+    void _params
+    return [];
   },
 
   /**
@@ -409,26 +355,34 @@ export const passengerService = {
   },
 
   /**
-   * 获取客流热力图数据 - 暂时使用模拟数据
+   * 获取客流热力图数据 - 使用Django热力图API
    */
   async getHeatmapData(params: AnalysisRequest): Promise<HeatmapData[]> {
     try {
-      // 模拟热力图数据
-      const stations = await this.getStations();
-      const timeDistribution = await this.getTimeDistribution(params);
+      const response = await apiClient.get('/analytics/heatmap/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
+        }
+      });
 
+      const payload = response.data as any;
+      const stations = payload?.stations || [];
+      const times = payload?.times || [];
+      const matrix = payload?.data || [];
       const heatmapData: HeatmapData[] = [];
 
-      // 生成站点-时间热力图数据
-      stations.slice(0, 10).forEach(station => {
-        timeDistribution.forEach(timeSlot => {
-          const value = Math.floor(Math.random() * 1000) +
-            (station.id % 10) * 100 + // 使不同站点有基础差异
-            timeSlot.hour * 50; // 使不同时间有基础差异
-
+      stations.forEach((station: string, rowIndex: number) => {
+        const row = matrix[rowIndex] || [];
+        times.forEach((time: string, colIndex: number) => {
+          const value = row[colIndex] ?? 0;
           heatmapData.push({
-            x: `${timeSlot.hour}:00`,
-            y: station.name,
+            x: time,
+            y: station,
             value
           });
         });
@@ -437,6 +391,37 @@ export const passengerService = {
       return heatmapData;
     } catch (error) {
       console.error('获取热力图数据失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 获取流向线数据 - 使用Django客流流向API
+   */
+  async getFlowLines(params: AnalysisRequest): Promise<FlowLineData[]> {
+    try {
+      const response = await apiClient.get('/analytics/flow/', {
+        params: {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          stationIds: params.stationIds,
+          lineIds: params.lineIds,
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
+        }
+      });
+
+      const items = response.data as any[];
+      return (items || []).map((item: any) => ({
+        fromStationId: item.fromStationId,
+        toStationId: item.toStationId,
+        fromStationName: item.fromStationName,
+        toStationName: item.toStationName,
+        passengerCount: item.passengerCount,
+        intensity: item.intensity
+      }));
+    } catch (error) {
+      console.error('获取流向线数据失败:', error);
       throw error;
     }
   },
@@ -522,6 +507,31 @@ export const passengerService = {
   /**
    * 获取数据统计摘要 - 使用Django API
    */
+  async getDataDateRange(): Promise<{ startDate: string; endDate: string } | null> {
+    try {
+      const response = await apiClient.get('/data/stats/', {
+        params: { _t: Date.now() }
+      });
+      const range = response?.dateRange;
+      if (range?.minDate && range?.maxDate) {
+        return {
+          startDate: range.minDate,
+          endDate: range.maxDate
+        };
+      }
+      if (range?.start && range?.end) {
+        return {
+          startDate: range.start,
+          endDate: range.end
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('获取数据日期范围失败:', error);
+      return null;
+    }
+  },
+
   async getDataSummary(): Promise<{
     totalRecords: number;
     dateRange: { start: string; end: string };

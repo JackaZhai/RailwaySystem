@@ -1,5 +1,5 @@
 <template>
-  <div class="trend-chart">
+  <div class="trend-chart" :class="{ flat: props.flat }">
     <div class="chart-header">
       <h3 class="chart-title">{{ title }}</h3>
       <div class="chart-actions">
@@ -36,18 +36,12 @@
             <div class="legend-color total"></div>
             <span>总客流量</span>
           </div>
-          <div class="legend-item">
-            <div class="legend-color inbound"></div>
-            <span>到达客流</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color outbound"></div>
-            <span>发送客流</span>
-          </div>
         </div>
       </div>
     </div>
     <div class="chart-container">
+      <div v-if="trendData.length === 0" class="chart-empty">暂无趋势数据</div>
+      <template v-else>
       <!-- 图表主体 -->
       <div class="chart-body">
         <!-- Y轴 -->
@@ -103,44 +97,6 @@
                 @mouseleave="hideTooltip"
               />
             </svg>
-
-            <!-- 到达客流线 -->
-            <svg class="trend-line-svg" width="100%" height="100%">
-              <polyline
-                :points="inboundPoints"
-                class="trend-line inbound"
-                fill="none"
-              />
-              <circle
-                v-for="(point, index) in inboundDataPoints"
-                :key="`inbound-${index}`"
-                :cx="point.x"
-                :cy="point.y"
-                r="4"
-                class="data-point inbound"
-                @mouseenter="showTooltip(index)"
-                @mouseleave="hideTooltip"
-              />
-            </svg>
-
-            <!-- 发送客流线 -->
-            <svg class="trend-line-svg" width="100%" height="100%">
-              <polyline
-                :points="outboundPoints"
-                class="trend-line outbound"
-                fill="none"
-              />
-              <circle
-                v-for="(point, index) in outboundDataPoints"
-                :key="`outbound-${index}`"
-                :cx="point.x"
-                :cy="point.y"
-                r="4"
-                class="data-point outbound"
-                @mouseenter="showTooltip(index)"
-                @mouseleave="hideTooltip"
-              />
-            </svg>
           </div>
         </div>
       </div>
@@ -161,37 +117,12 @@
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">{{ formatNumber(stats.inbound) }}</div>
-          <div class="stat-label">到达客流</div>
-          <div class="stat-trend" :class="stats.inboundTrend >= 0 ? 'positive' : 'negative'">
-            <span>{{ stats.inboundTrend >= 0 ? '+' : '' }}{{ stats.inboundTrend }}%</span>
-            <svg v-if="stats.inboundTrend >= 0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ formatNumber(stats.outbound) }}</div>
-          <div class="stat-label">发送客流</div>
-          <div class="stat-trend" :class="stats.outboundTrend >= 0 ? 'positive' : 'negative'">
-            <span>{{ stats.outboundTrend >= 0 ? '+' : '' }}{{ stats.outboundTrend }}%</span>
-            <svg v-if="stats.outboundTrend >= 0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-        </div>
-        <div class="stat-card">
           <div class="stat-value">{{ stats.peakTime }}</div>
           <div class="stat-label">高峰时段</div>
           <div class="stat-detail">{{ stats.peakValue.toLocaleString() }} 人</div>
         </div>
       </div>
+      </template>
     </div>
 
     <!-- 工具提示 -->
@@ -211,42 +142,24 @@
           </div>
           <div class="tooltip-value">{{ tooltip.total.toLocaleString() }} 人</div>
         </div>
-        <div class="tooltip-row">
-          <div class="tooltip-label">
-            <div class="legend-color inbound"></div>
-            <span>到达客流：</span>
-          </div>
-          <div class="tooltip-value">{{ tooltip.inbound.toLocaleString() }} 人</div>
-        </div>
-        <div class="tooltip-row">
-          <div class="tooltip-label">
-            <div class="legend-color outbound"></div>
-            <span>发送客流：</span>
-          </div>
-          <div class="tooltip-value">{{ tooltip.outbound.toLocaleString() }} 人</div>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 
 interface TrendData {
   time: string
   total: number
-  inbound: number
-  outbound: number
+  inbound?: number
+  outbound?: number
 }
 
 interface Stats {
   total: number
-  inbound: number
-  outbound: number
   totalTrend: number
-  inboundTrend: number
-  outboundTrend: number
   peakTime: string
   peakValue: number
 }
@@ -255,8 +168,6 @@ interface TooltipData {
   visible: boolean
   time: string
   total: number
-  inbound: number
-  outbound: number
   x: number
   y: number
 }
@@ -269,31 +180,40 @@ interface DataPoint {
 const props = withDefaults(defineProps<{
   title?: string
   data?: TrendData[]
+  granularity?: 'hourly' | 'daily' | 'weekly' | 'monthly'
+  flat?: boolean
 }>(), {
   title: '客流趋势分析',
-  data: () => []
+  data: () => [],
+  granularity: 'daily',
+  flat: false
 })
 
+const emit = defineEmits<{
+  'granularity-change': ['hourly' | 'daily' | 'weekly' | 'monthly']
+}>()
+
 // 时间范围
-const timeRange = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>('daily')
+const timeRange = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>(props.granularity)
+
+watch(() => props.granularity, (value) => {
+  if (value && value !== timeRange.value) {
+    timeRange.value = value
+  }
+})
 
 // 工具提示
 const tooltip = ref<TooltipData>({
   visible: false,
   time: '',
   total: 0,
-  inbound: 0,
-  outbound: 0,
   x: 0,
   y: 0
 })
 
 // 趋势数据
 const trendData = computed(() => {
-  if (props.data.length > 0) {
-    return props.data
-  }
-  return generateMockData()
+  return props.data || []
 })
 
 // X轴标签
@@ -314,6 +234,9 @@ const xAxisLabels = computed(() => {
 
 // Y轴标签
 const yAxisLabels = computed(() => {
+  if (trendData.value.length === 0) {
+    return ['0']
+  }
   const maxValue = Math.max(...trendData.value.map(d => d.total))
   const step = Math.ceil(maxValue / 4 / 1000) * 1000
   return [
@@ -328,14 +251,16 @@ const yAxisLabels = computed(() => {
 // 统计数据
 const stats = computed<Stats>(() => {
   const data = trendData.value
+  if (data.length === 0) {
+    return {
+      total: 0,
+      totalTrend: 0,
+      peakTime: '--',
+      peakValue: 0
+    }
+  }
   const total = data.reduce((sum, d) => sum + d.total, 0)
-  const inbound = data.reduce((sum, d) => sum + d.inbound, 0)
-  const outbound = data.reduce((sum, d) => sum + d.outbound, 0)
-
-  // 计算趋势（模拟）
-  const totalTrend = Math.round((Math.random() - 0.5) * 20)
-  const inboundTrend = Math.round((Math.random() - 0.5) * 15)
-  const outboundTrend = Math.round((Math.random() - 0.5) * 18)
+  const totalTrend = 0
 
   // 找到高峰时段
   const peakData = data.reduce<TrendData>((max, d) => (d.total > max.total ? d : max), {
@@ -347,11 +272,7 @@ const stats = computed<Stats>(() => {
 
   return {
     total,
-    inbound,
-    outbound,
     totalTrend,
-    inboundTrend,
-    outboundTrend,
     peakTime: peakData.time,
     peakValue: peakData.total
   }
@@ -362,29 +283,9 @@ const totalDataPoints = computed(() => {
   return calculateDataPoints(trendData.value.map(d => d.total))
 })
 
-// 到达客流数据点
-const inboundDataPoints = computed(() => {
-  return calculateDataPoints(trendData.value.map(d => d.inbound))
-})
-
-// 发送客流数据点
-const outboundDataPoints = computed(() => {
-  return calculateDataPoints(trendData.value.map(d => d.outbound))
-})
-
 // 总客流量折线点
 const totalPoints = computed(() => {
   return totalDataPoints.value.map(p => `${p.x},${p.y}`).join(' ')
-})
-
-// 到达客流折线点
-const inboundPoints = computed(() => {
-  return inboundDataPoints.value.map(p => `${p.x},${p.y}`).join(' ')
-})
-
-// 发送客流折线点
-const outboundPoints = computed(() => {
-  return outboundDataPoints.value.map(p => `${p.x},${p.y}`).join(' ')
 })
 
 // 工具提示样式
@@ -393,58 +294,11 @@ const tooltipStyle = computed(() => ({
   top: `${tooltip.value.y}px`
 }))
 
-// 生成模拟数据
-const generateMockData = (): TrendData[] => {
-  const count = timeRange.value === 'hourly' ? 24 :
-                timeRange.value === 'daily' ? 7 :
-                timeRange.value === 'weekly' ? 4 : 12
-
-  const data: TrendData[] = []
-  const baseTotal = 5000
-  const baseInbound = 3000
-  const baseOutbound = 2000
-
-  for (let i = 0; i < count; i++) {
-    const timeFactor = Math.sin(i / count * Math.PI) * 0.5 + 0.5
-    const dayFactor = i < 2 ? 0.3 : i < 4 ? 0.7 : 1.0
-    const randomFactor = 0.8 + Math.random() * 0.4
-
-    const total = Math.round(baseTotal * timeFactor * dayFactor * randomFactor)
-    const inbound = Math.round(baseInbound * timeFactor * dayFactor * randomFactor * 0.9)
-    const outbound = Math.round(baseOutbound * timeFactor * dayFactor * randomFactor * 1.1)
-
-    let time = ''
-    switch (timeRange.value) {
-      case 'hourly':
-        time = `${i.toString().padStart(2, '0')}:00`
-        break
-      case 'daily':
-        {
-          const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-          time = days[i % days.length] ?? ''
-          break
-        }
-      case 'weekly':
-        time = `第${i + 1}周`
-        break
-      case 'monthly':
-        time = `${i + 1}月`
-        break
-    }
-
-    data.push({
-      time,
-      total,
-      inbound,
-      outbound
-    })
-  }
-
-  return data
-}
-
 // 计算数据点坐标
 const calculateDataPoints = (values: number[]): DataPoint[] => {
+  if (values.length === 0) {
+    return []
+  }
   const maxValue = Math.max(...values)
   const minValue = Math.min(...values)
   const valueRange = maxValue - minValue || 1
@@ -479,8 +333,6 @@ const showTooltip = (index: number) => {
     visible: true,
     time: data.time,
     total: data.total,
-    inbound: data.inbound,
-    outbound: data.outbound,
     x: 100 + index * 60,
     y: 150
   }
@@ -494,6 +346,7 @@ const hideTooltip = () => {
 // 切换时间范围
 const changeTimeRange = (range: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
   timeRange.value = range
+  emit('granularity-change', range)
 }
 
 // 初始化
@@ -509,6 +362,12 @@ onMounted(() => {
   padding: var(--spacing-4);
   box-shadow: var(--shadow-md);
   position: relative;
+}
+
+.trend-chart.flat {
+  background-color: transparent;
+  box-shadow: none;
+  padding: 0;
 }
 
 .chart-header {
@@ -575,16 +434,17 @@ onMounted(() => {
   background-color: var(--color-primary);
 }
 
-.legend-color.inbound {
-  background-color: var(--color-success);
-}
-
-.legend-color.outbound {
-  background-color: var(--color-secondary);
-}
-
 .chart-container {
   position: relative;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .chart-body {
@@ -664,13 +524,6 @@ onMounted(() => {
   stroke: var(--color-primary);
 }
 
-.trend-line.inbound {
-  stroke: var(--color-success);
-}
-
-.trend-line.outbound {
-  stroke: var(--color-secondary);
-}
 
 .data-point {
   cursor: pointer;
@@ -687,21 +540,10 @@ onMounted(() => {
   stroke-width: 2;
 }
 
-.data-point.inbound {
-  fill: var(--color-success);
-  stroke: white;
-  stroke-width: 2;
-}
-
-.data-point.outbound {
-  fill: var(--color-secondary);
-  stroke: white;
-  stroke-width: 2;
-}
 
 .chart-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--spacing-3);
   margin-top: var(--spacing-4);
 }
