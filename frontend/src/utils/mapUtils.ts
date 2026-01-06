@@ -52,14 +52,16 @@ export function calculateMarkerColor(
  * @returns FlowLine对象
  */
 export function createFlowLine(
-  fromStation: { id: number; position: [number, number] },
-  toStation: { id: number; position: [number, number] },
+  fromStation: { id: number; position: [number, number]; name?: string },
+  toStation: { id: number; position: [number, number]; name?: string },
   passengerCount: number
 ): FlowLine {
   return {
     id: `flow-${fromStation.id}-${toStation.id}`,
     fromStationId: fromStation.id,
     toStationId: toStation.id,
+    fromStationName: fromStation.name,
+    toStationName: toStation.name,
     fromPosition: fromStation.position,
     toPosition: toStation.position,
     passengers: passengerCount,

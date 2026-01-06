@@ -29,12 +29,23 @@ export interface FlowLine {
   id: string
   fromStationId: number
   toStationId: number
+  fromStationName?: string
+  toStationName?: string
   fromPosition: [number, number]
   toPosition: [number, number]
   passengers: number
   color?: string
+  arrowColor?: string
   width?: number
   dashArray?: string
+  loadRate?: number
+  capacity?: number
+  load?: number
+  gap?: number
+  route?: string
+  time?: string
+  blink?: boolean
+  selected?: boolean
 }
 
 export interface MapViewState {

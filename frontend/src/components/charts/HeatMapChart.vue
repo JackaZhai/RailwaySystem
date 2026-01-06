@@ -2,7 +2,7 @@
   <div class="heatmap-chart">
     <div class="chart-header">
       <h3 class="chart-title">{{ title }}</h3>
-      <div class="chart-actions">
+      <div v-if="!hasCustomLabels" class="chart-actions">
         <button
           class="action-btn"
           :class="{ active: viewMode === 'hourly' }"
@@ -27,6 +27,8 @@
       </div>
     </div>
     <div class="chart-container">
+      <div v-if="heatmapData.length === 0" class="chart-empty">暂无热力图数据</div>
+      <template v-else>
       <div class="heatmap-grid">
         <!-- Y轴标签 -->
         <div class="y-axis">
@@ -89,6 +91,7 @@
           </div>
         </div>
       </div>
+      </template>
     </div>
 
     <!-- 工具提示 -->
@@ -140,9 +143,13 @@ interface TooltipData {
 const props = withDefaults(defineProps<{
   title?: string
   data?: HeatMapCell[][]
+  xLabels?: string[]
+  yLabels?: string[]
 }>(), {
   title: '客流热力图',
-  data: () => []
+  data: () => [],
+  xLabels: () => [],
+  yLabels: () => []
 })
 
 // 视图模式
@@ -161,40 +168,31 @@ const tooltip = ref<TooltipData>({
 
 // 热力图数据
 const heatmapData = computed(() => {
-  if (props.data.length > 0) {
-    return props.data
-  }
-
-  // 生成模拟数据
-  return generateMockData()
+  return props.data || []
 })
+
+const hasCustomLabels = computed(() => props.xLabels.length > 0 || props.yLabels.length > 0)
 
 // X轴标签
 const xAxisLabels = computed(() => {
-  switch (viewMode.value) {
-    case 'hourly':
-      return ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
-    case 'daily':
-      return ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-    case 'weekly':
-      return ['第1周', '第2周', '第3周', '第4周']
-    default:
-      return []
+  if (props.xLabels.length > 0) {
+    return props.xLabels
   }
+  if (heatmapData.value.length > 0) {
+    return heatmapData.value[0].map(cell => cell.time)
+  }
+  return []
 })
 
 // Y轴标签
 const yAxisLabels = computed(() => {
-  switch (viewMode.value) {
-    case 'hourly':
-      return ['成都东', '重庆北', '内江北', '资阳北', '永川东']
-    case 'daily':
-      return ['成都东', '重庆北', '内江北', '资阳北', '永川东']
-    case 'weekly':
-      return ['成渝高铁', '渝贵铁路', '成贵高铁', '西成高铁', '渝万铁路']
-    default:
-      return []
+  if (props.yLabels.length > 0) {
+    return props.yLabels
   }
+  if (heatmapData.value.length > 0) {
+    return heatmapData.value.map(row => row[0]?.label || '')
+  }
+  return []
 })
 
 // 工具提示样式
@@ -202,50 +200,6 @@ const tooltipStyle = computed(() => ({
   left: `${tooltip.value.x}px`,
   top: `${tooltip.value.y}px`
 }))
-
-// 生成模拟数据
-const generateMockData = (): HeatMapCell[][] => {
-  const rows = yAxisLabels.value.length
-  const cols = xAxisLabels.value.length
-  const data: HeatMapCell[][] = []
-
-  for (let i = 0; i < rows; i++) {
-    const row: HeatMapCell[] = []
-    for (let j = 0; j < cols; j++) {
-      const baseValue = 1000 + Math.random() * 5000
-      const timeFactor = j < 2 ? 0.3 : j < 4 ? 0.7 : 1.0
-      const stationFactor = i < 2 ? 1.2 : i < 4 ? 0.8 : 1.0
-      const value = Math.round(baseValue * timeFactor * stationFactor)
-
-      let time = ''
-      let label = ''
-
-      switch (viewMode.value) {
-        case 'hourly':
-          time = `${xAxisLabels.value[j]}`
-          label = `${yAxisLabels.value[i]}站`
-          break
-        case 'daily':
-          time = `${xAxisLabels.value[j]}`
-          label = `${yAxisLabels.value[i]}站`
-          break
-        case 'weekly':
-          time = `${xAxisLabels.value[j]}`
-          label = `${yAxisLabels.value[i]}`
-          break
-      }
-
-      row.push({
-        value,
-        time,
-        label
-      })
-    }
-    data.push(row)
-  }
-
-  return data
-}
 
 // 获取单元格颜色
 const getCellColor = (value: number): string => {
@@ -306,6 +260,9 @@ const hideTooltip = () => {
 
 // 切换视图模式
 const changeViewMode = (mode: 'hourly' | 'daily' | 'weekly') => {
+  if (hasCustomLabels.value) {
+    return
+  }
   viewMode.value = mode
 }
 
@@ -366,6 +323,15 @@ onMounted(() => {
 
 .chart-container {
   position: relative;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .heatmap-grid {
