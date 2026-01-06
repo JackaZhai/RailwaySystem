@@ -54,7 +54,7 @@ def check_dependencies():
 
     # 检查npm
     try:
-        subprocess.run(["npm", "--version"], capture_output=True, check=True)
+        subprocess.run(["npm", "--version"], capture_output=True, check=True, shell=(os.name == 'nt'))
         print("  ✅ npm可用")
     except Exception as e:
         print(f"  ❌ npm不可用: {e}")
@@ -166,7 +166,8 @@ def start_frontend(frontend_dir, backend_port):
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        universal_newlines=True
+        universal_newlines=True,
+        shell=(os.name == 'nt')
     )
 
     print(f"  前端服务器启动中 (PID: {frontend_proc.pid})")

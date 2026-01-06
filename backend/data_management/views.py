@@ -717,6 +717,60 @@ class PassengerFlowViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class TimeDistributionView(APIView):
+    """时间分布分析视图"""
+
+    def get(self, request):
+        try:
+            start, end, _range_type = _resolve_date_range(request, default_range_type='month', require_explicit=True)
+            station_id = request.query_params.get('stationId') or request.query_params.get('station_id')
+
+            pf_qs = PassengerFlow.objects.all()
+            if start and end:
+                pf_qs = pf_qs.filter(operation_date__range=[start, end])
+
+            if station_id:
+                try:
+                    pf_qs = pf_qs.filter(station_id=int(station_id))
+                except (TypeError, ValueError):
+                    pass
+
+            pf_qs = pf_qs.filter(Q(arrival_time__isnull=False) | Q(departure_time__isnull=False))
+
+            hourly_data = pf_qs.annotate(
+                hour=ExtractHour(Coalesce('arrival_time', 'departure_time'))
+            ).values('hour').annotate(
+                total_passengers=Sum(F('passengers_in') + F('passengers_out')),
+                passengers_in=Sum('passengers_in'),
+                passengers_out=Sum('passengers_out'),
+                record_count=Count('id')
+            ).order_by('hour')
+
+            stats_map = {item['hour']: item for item in hourly_data if item['hour'] is not None}
+
+            hourly_stats = []
+            for hour in range(24):
+                data = stats_map.get(hour, {})
+                total_passengers = data.get('total_passengers', 0) or 0
+                record_count = data.get('record_count', 0) or 1
+                avg_passengers = total_passengers / record_count if record_count > 0 else 0
+                passengers_in = data.get('passengers_in', 0) or 0
+                passengers_out = data.get('passengers_out', 0) or 0
+
+                hourly_stats.append({
+                    'hour': hour,
+                    'totalPassengers': total_passengers,
+                    'passengersIn': passengers_in,
+                    'passengersOut': passengers_out,
+                    'avgPassengers': avg_passengers,
+                })
+
+            return Response(hourly_stats)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class FlowAnalysisView(APIView):
     """客流分析视图"""
 
@@ -2115,9 +2169,10 @@ class BusyRankingView(APIView):
 
             hourly_rows = pf_qs.filter(
                 station_id__in=station_id_list,
-                arrival_time__isnull=False,
+            ).filter(
+                Q(arrival_time__isnull=False) | Q(departure_time__isnull=False)
             ).annotate(
-                hour=ExtractHour('arrival_time')
+                hour=ExtractHour(Coalesce('arrival_time', 'departure_time'))
             ).values('station_id', 'hour').annotate(
                 flow=Sum(F('passengers_in') + F('passengers_out'))
             ).order_by('station_id', '-flow')

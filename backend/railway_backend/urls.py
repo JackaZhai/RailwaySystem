@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/analytics/heatmap/', data_views.AnalyticsHeatmapView.as_view(), name='analytics-heatmap'),
     path('api/analytics/trend/', data_views.AnalyticsTrendView.as_view(), name='analytics-trend'),
     path('api/analytics/time-periods/', data_views.AnalyticsTimePeriodsView.as_view(), name='analytics-time-periods'),
+    path('api/analytics/time-distribution/', data_views.TimeDistributionView.as_view(), name='time-distribution'),
     path('api/analytics/line-loads/', data_views.AnalyticsLineLoadsView.as_view(), name='analytics-line-loads'),
     path('api/analytics/map/', data_views.AnalyticsMapView.as_view(), name='analytics-map'),
     path('api/analytics/trains/', data_views.AnalyticsTrainsView.as_view(), name='analytics-trains'),

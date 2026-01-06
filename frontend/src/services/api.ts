@@ -466,6 +466,49 @@ export const apiService = {
     return api.get<HeatMapData>('/analytics/heatmap/', { params: timeRange }) as unknown as Promise<HeatMapData>
   },
 
+  // 站点评估
+  getStationAssessment: (params: { rangeType: string; startDate: string; endDate: string }) => {
+    return api.get<StationAssessmentData[]>('/analytics/stations/', { params }) as unknown as Promise<StationAssessmentData[]>
+  },
+
+  // 站点角色分析
+  getStationRoleAnalysis: (params: {
+    rangeType: string
+    startDate: string
+    endDate: string
+    q?: string
+    page?: number
+    page_size?: number
+  }) => {
+    return api.get<StationRoleAnalysisResponse>('/analytics/station-roles/', { params }) as unknown as Promise<StationRoleAnalysisResponse>
+  },
+
+  // 繁忙度排名
+  getBusyRanking: (params: {
+    rangeType: string
+    startDate: string
+    endDate: string
+    q?: string
+    page?: number
+    page_size?: number
+    wSend?: number
+    wArrive?: number
+    wTransfer?: number
+  }) => {
+    return api.get<BusyRankingResponse>('/analytics/busy-ranking/', { params }) as unknown as Promise<BusyRankingResponse>
+  },
+
+  // 时间分布数据
+  getTimeDistribution: (params: {
+    startDate?: string
+    endDate?: string
+    stationId?: number | null
+  }) => {
+    return api.get<TimeDistribution[]>('/analytics/time-distribution/', {
+      params
+    }) as unknown as Promise<TimeDistribution[]>
+  },
+
   // 流向图数据
   getFlowData: (timeRange: TimeRange): Promise<FlowData[]> => {
     return api.get('/analytics/flow/', { params: timeRange }) as unknown as Promise<FlowData[]>
