@@ -1035,7 +1035,7 @@ const formatDateTime = (dateString: string) => {
   try {
     const date = new Date(dateString)
     return date.toLocaleString('zh-CN')
-  } catch (error) {
+  } catch {
     return dateString
   }
 }

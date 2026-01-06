@@ -30,6 +30,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/analytics/flow/', data_views.FlowAnalysisView.as_view(), name='flow-analysis'),
+    path('api/analytics/heatmap/', data_views.HeatMapView.as_view(), name='heatmap'),
+    path('api/analytics/kpi/', data_views.KpiView.as_view(), name='kpi'),
+    path('api/analytics/stations/', data_views.StationAssessmentView.as_view(), name='station-assessment'),
+    path('api/analytics/station-roles/', data_views.StationRoleAnalysisView.as_view(), name='station-role-analysis'),
+    path('api/analytics/busy-ranking/', data_views.BusyRankingView.as_view(), name='busy-ranking'),
     # 数据管理API
     path('api/data/stats/', data_views.DataStatsView.as_view(), name='data-stats'),
     path('api/data/records/', data_views.DataRecordsView.as_view(), name='data-records'),

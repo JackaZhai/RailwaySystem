@@ -171,6 +171,9 @@ const heatmapData = computed(() => {
 
 // X轴标签
 const xAxisLabels = computed(() => {
+  if (props.data.length > 0 && props.data[0]?.length) {
+    return props.data[0].map(cell => cell.time)
+  }
   switch (viewMode.value) {
     case 'hourly':
       return ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
@@ -185,6 +188,11 @@ const xAxisLabels = computed(() => {
 
 // Y轴标签
 const yAxisLabels = computed(() => {
+  if (props.data.length > 0) {
+    return props.data
+      .map(row => row[0]?.label)
+      .filter((label): label is string => Boolean(label))
+  }
   switch (viewMode.value) {
     case 'hourly':
       return ['成都东', '重庆北', '内江北', '资阳北', '永川东']
@@ -280,7 +288,7 @@ const getLegendColor = (step: number): string => {
 // 获取图例标签
 const getLegendLabel = (step: number): string => {
   const labels = ['极低', '较低', '中等', '较高', '极高']
-  return labels[step - 1]
+  return labels[step - 1] || ''
 }
 
 // 显示工具提示

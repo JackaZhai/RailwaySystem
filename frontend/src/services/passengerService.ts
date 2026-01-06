@@ -51,7 +51,7 @@ apiClient.interceptors.request.use(
 
 // 响应拦截器
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => response,
   (error) => {
     console.error('API请求错误:', error);
 
@@ -69,6 +69,8 @@ apiClient.interceptors.response.use(
   }
 );
 
+const toISODate = (date: Date) => date.toISOString().split('T')[0] || '';
+
 /**
  * 客流分析服务 - 连接到Django后端API
  */
@@ -80,7 +82,7 @@ export const passengerService = {
     try {
       // 调用Django客流分析API
       const response = await apiClient.post('/analytics/flow/', params);
-      const backendData = response.data;
+      const backendData = response.data as any;
 
       // 转换数据格式以匹配前端类型
       const flowTrendData: FlowTrendData = {
@@ -115,7 +117,7 @@ export const passengerService = {
       if (params.endDate) queryParams.append('end_date', params.endDate);
 
       const response = await apiClient.get(`/passenger-flows/station_ranking/?${queryParams}`);
-      const backendData = response;
+      const backendData = response.data as any[];
 
       // 转换数据格式以匹配前端类型
       const stationRankings: StationRanking[] = backendData.map((item: any) => ({
@@ -143,7 +145,8 @@ export const passengerService = {
     try {
       // 从Django获取线路数据
       const routesResponse = await apiClient.get('/routes/');
-      const routes = routesResponse.results || routesResponse;
+      const routesData = routesResponse.data as any;
+      const routes = routesData.results || routesData;
 
       // 获取客运记录汇总来计算负载
       const queryParams = new URLSearchParams();
@@ -151,7 +154,8 @@ export const passengerService = {
       if (params.endDate) queryParams.append('end_date', params.endDate);
 
       const flowsResponse = await apiClient.get(`/passenger-flows/?${queryParams}`);
-      const flows = flowsResponse.results || flowsResponse;
+      const flowsData = flowsResponse.data as any;
+      const flows = flowsData.results || flowsData;
 
       // 按线路分组计算负载
       const lineLoads: LineLoadData[] = routes.map((route: any) => {
@@ -193,7 +197,7 @@ export const passengerService = {
       if (params.endDate) queryParams.append('end_date', params.endDate);
 
       const response = await apiClient.get(`/passenger-flows/time_distribution/?${queryParams}`);
-      const backendData = response;
+      const backendData = response.data as any[];
 
       // 转换数据格式以匹配前端类型
       const timeDistribution: TimeDistribution[] = backendData.map((item: any) => ({
@@ -220,7 +224,7 @@ export const passengerService = {
       const stationRankings = await this.getStationRankings(params);
 
       // 模拟地理坐标（实际项目中应从数据库获取）
-      const spatialDistribution: SpatialDistribution[] = stationRankings.slice(0, 20).map((station, index) => {
+      const spatialDistribution: SpatialDistribution[] = stationRankings.slice(0, 20).map((station) => {
         // 为前20个站点生成模拟坐标（成都-重庆区域）
         const baseLat = 30.6595; // 成都纬度
         const baseLng = 104.0659; // 成都经度
@@ -277,7 +281,7 @@ export const passengerService = {
         const confidence = 0.85 + Math.random() * 0.1; // 85-95%置信度
 
         forecastData.push({
-          timestamp: forecastDate.toISOString().split('T')[0],
+          timestamp: toISODate(forecastDate),
           forecast: forecastValue,
           lowerBound: forecastValue * (1 - 0.1 * (1 - confidence)),
           upperBound: forecastValue * (1 + 0.1 * (1 - confidence)),
@@ -299,12 +303,12 @@ export const passengerService = {
     try {
       // 模拟实时数据
       const stations = await this.getStations();
-      const realTimeFlows: RealTimeFlow[] = stations.slice(0, 10).map((station, index) => {
+      const realTimeFlows: RealTimeFlow[] = stations.slice(0, 10).map((station) => {
         const currentPassengers = Math.floor(Math.random() * 1000) + 500;
         const capacity = 2000;
         const occupancyRate = currentPassengers / capacity;
         const trends: ('up' | 'down' | 'stable')[] = ['up', 'down', 'stable'];
-        const trend = trends[Math.floor(Math.random() * 3)];
+        const trend = trends[Math.floor(Math.random() * 3)] ?? 'stable';
 
         return {
           stationId: station.id,
@@ -327,16 +331,19 @@ export const passengerService = {
   /**
    * 获取客流异常检测 - 暂时使用模拟数据
    */
-  async getFlowAnomalies(params: AnalysisRequest): Promise<FlowAnomaly[]> {
+  async getFlowAnomalies(_params: AnalysisRequest): Promise<FlowAnomaly[]> {
     try {
+      void _params
       // 模拟异常检测数据
       const stations = await this.getStations();
+      if (stations.length === 0) return [];
       const anomalies: FlowAnomaly[] = [];
 
       // 随机生成1-3个异常
       const numAnomalies = Math.floor(Math.random() * 3) + 1;
       for (let i = 0; i < numAnomalies; i++) {
         const station = stations[Math.floor(Math.random() * stations.length)];
+        if (!station) continue;
         const expectedValue = Math.floor(Math.random() * 1000) + 500;
         const actualValue = expectedValue * (1.5 + Math.random() * 0.5); // 150-200%的偏差
         const deviation = ((actualValue - expectedValue) / expectedValue) * 100;
@@ -350,7 +357,7 @@ export const passengerService = {
           expectedValue,
           actualValue,
           deviation,
-          severity: severity[Math.floor(Math.random() * 3)],
+          severity: severity[Math.floor(Math.random() * 3)] ?? 'low',
           description: `站点 ${station.name} 客流量异常偏高`
         });
       }
@@ -465,7 +472,7 @@ export const passengerService = {
           item.totalPassengers > max.totalPassengers ? item : max,
           { hour: 0, totalPassengers: 0 }
         ).hour,
-        busiestStation: stationRankings.length > 0 ? stationRankings[0].stationName : '无数据',
+        busiestStation: stationRankings[0]?.stationName ?? '无数据',
         busiestLine: lineLoads.length > 0 ?
           lineLoads.reduce((max, line) => line.totalPassengers > max.totalPassengers ? line : max).lineName : '无数据'
       };
@@ -493,8 +500,9 @@ export const passengerService = {
   /**
    * 导出分析数据 - 暂时返回模拟数据
    */
-  async exportAnalysisData(params: AnalysisRequest, options: ExportOptions): Promise<Blob> {
+  async exportAnalysisData(params: AnalysisRequest, _options: ExportOptions): Promise<Blob> {
     try {
+      void _options
       // 获取分析数据
       const analysisData = await this.getComprehensiveAnalysis(params);
 
@@ -532,20 +540,21 @@ export const passengerService = {
       ]);
 
       // 获取客运记录的日期范围
-      const flows = flowsResponse.results || flowsResponse;
-      const dates = flows.map((flow: any) => new Date(flow.operation_date));
-      const minDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : new Date();
-      const maxDate = dates.length > 0 ? new Date(Math.max(...dates.map(d => d.getTime()))) : new Date();
+      const flowsData = flowsResponse.data as any;
+      const flows = flowsData.results || flowsData;
+      const dates: Date[] = flows.map((flow: any) => new Date(flow.operation_date));
+      const minDate = dates.length > 0 ? new Date(Math.min(...dates.map((d: Date) => d.getTime()))) : new Date();
+      const maxDate = dates.length > 0 ? new Date(Math.max(...dates.map((d: Date) => d.getTime()))) : new Date();
 
       return {
         totalRecords: flows.length,
         dateRange: {
-          start: minDate.toISOString().split('T')[0],
-          end: maxDate.toISOString().split('T')[0]
+          start: toISODate(minDate),
+          end: toISODate(maxDate)
         },
-        stations: stationsResponse.count || (stationsResponse.results ? stationsResponse.results.length : stationsResponse.length),
-        lines: routesResponse.count || (routesResponse.results ? routesResponse.results.length : routesResponse.length),
-        trains: trainsResponse.count || (trainsResponse.results ? trainsResponse.results.length : trainsResponse.length),
+        stations: (stationsResponse.data as any)?.count || (((stationsResponse.data as any)?.results ? (stationsResponse.data as any).results.length : (stationsResponse.data as any).length) ?? 0),
+        lines: (routesResponse.data as any)?.count || (((routesResponse.data as any)?.results ? (routesResponse.data as any).results.length : (routesResponse.data as any).length) ?? 0),
+        trains: (trainsResponse.data as any)?.count || (((trainsResponse.data as any)?.results ? (trainsResponse.data as any).results.length : (trainsResponse.data as any).length) ?? 0),
         lastUpdate: new Date().toISOString()
       };
     } catch (error) {
@@ -565,7 +574,8 @@ export const passengerService = {
   }>> {
     try {
       const response = await apiClient.get('/stations/');
-      const stations = response.results || response;
+      const data = response.data as any;
+      const stations = data.results || data;
 
       return stations.map((station: any) => ({
         id: station.id,
@@ -589,7 +599,8 @@ export const passengerService = {
   }>> {
     try {
       const response = await apiClient.get('/routes/');
-      const routes = response.results || response;
+      const data = response.data as any;
+      const routes = data.results || data;
 
       return routes.map((route: any) => ({
         id: route.id,
@@ -612,7 +623,8 @@ export const passengerService = {
   }>> {
     try {
       const response = await apiClient.get('/trains/');
-      const trains = response.results || response;
+      const data = response.data as any;
+      const trains = data.results || data;
 
       return trains.map((train: any) => ({
         id: train.id,

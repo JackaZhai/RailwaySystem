@@ -39,52 +39,8 @@
       <div class="filter-container">
         <div class="filter-group">
           <label class="filter-label">时间范围</label>
-          <div class="filter-buttons">
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'today' }"
-              @click="selectTimeRange('today')"
-            >
-              今天
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'week' }"
-              @click="selectTimeRange('week')"
-            >
-              本周
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'month' }"
-              @click="selectTimeRange('month')"
-            >
-              本月
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'quarter' }"
-              @click="selectTimeRange('quarter')"
-            >
-              本季度
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'year' }"
-              @click="selectTimeRange('year')"
-            >
-              本年
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'custom' }"
-              @click="selectTimeRange('custom')"
-            >
-              自定义
-            </button>
-          </div>
         </div>
-        <div v-if="selectedRange === 'custom'" class="date-picker">
+        <div class="date-picker">
           <input
             v-model="startDate"
             type="date"
@@ -99,10 +55,11 @@
             @change="updateCustomDateRange"
           />
         </div>
-        <div v-if="selectedRange !== 'custom'" class="filter-stats">
+        <div class="filter-stats">
           <span class="stat-label">统计周期：</span>
-          <span class="stat-value">{{ timeRangeLabel }}</span>
-          <span class="stat-duration">（{{ timeRangeDuration }}）</span>
+          <span class="stat-value">{{ dateRangeLabel }}</span>
+          <span class="stat-duration">（{{ dateRangeDuration }}）</span>
+          <span v-if="dateRangeError" class="date-error">{{ dateRangeError }}</span>
         </div>
       </div>
     </div>
@@ -142,7 +99,7 @@
           </div>
         </div>
         <div class="kpi-footer">
-          <span class="kpi-period">今日累计</span>
+          <span class="kpi-period">{{ dateRangeLabel }}</span>
         </div>
       </div>
 
@@ -176,7 +133,7 @@
           </div>
         </div>
         <div class="kpi-footer">
-          <span class="kpi-period">今日累计</span>
+          <span class="kpi-period">{{ dateRangeLabel }}</span>
         </div>
       </div>
 
@@ -243,7 +200,7 @@
           </div>
         </div>
         <div class="kpi-footer">
-          <span class="kpi-period">今日累计</span>
+          <span class="kpi-period">{{ dateRangeLabel }}</span>
         </div>
       </div>
     </div>
@@ -599,7 +556,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import AnimatedNumber from '@/components/ui/AnimatedNumber.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
@@ -607,120 +564,83 @@ import HeatMapChart from '@/components/charts/HeatMapChart.vue'
 import StationMap from '@/components/maps/StationMap.vue'
 import TrendChart from '@/components/charts/TrendChart.vue'
 import PassengerFlowAnalysis from '@/components/analytics/PassengerFlowAnalysis.vue'
-import { mockService, type TimeRange, type KpiData, type Station, type Line, type TrendData, type TimePeriodData } from '@/services/api'
+import { apiService, mockService, type HeatMapCell, type TimeRange, type KpiData, type Line, type TrendData, type TimePeriodData, type StationSummary } from '@/services/api'
+import { DATE_CONFIG } from '@/config'
+
+// 组件状态
+const isUnmounted = ref(false)
+
+onUnmounted(() => {
+  isUnmounted.value = true
+})
 
 // 时间范围筛选
-const selectedRange = ref<'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>('today')
 const startDate = ref('')
 const endDate = ref('')
+const dateRangeError = ref('')
 
-// 计算时间范围标签
-const timeRangeLabel = computed(() => {
-  const now = new Date()
-  switch (selectedRange.value) {
-    case 'today':
-      return now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
-    case 'week':
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()))
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      return `${weekStart.getMonth() + 1}月${weekStart.getDate()}日 - ${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`
-    case 'month':
-      return `${now.getMonth() + 1}月`
-    case 'quarter':
-      const quarter = Math.floor(now.getMonth() / 3) + 1
-      return `第${quarter}季度`
-    case 'year':
-      return `${now.getFullYear()}年`
-    default:
-      return '自定义范围'
-  }
-})
-
-// 计算时间范围时长
-const timeRangeDuration = computed(() => {
-  switch (selectedRange.value) {
-    case 'today':
-      return '1天'
-    case 'week':
-      return '7天'
-    case 'month':
-      const now = new Date()
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-      return `${daysInMonth}天`
-    case 'quarter':
-      return '约90天'
-    case 'year':
-      return '365天'
-    default:
-      if (startDate.value && endDate.value) {
-        const start = new Date(startDate.value)
-        const end = new Date(endDate.value)
-        const diffTime = Math.abs(end.getTime() - start.getTime())
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-        return `${diffDays}天`
-      }
-      return '请选择日期'
-  }
-})
-
-// 选择时间范围
-const selectTimeRange = (range: typeof selectedRange.value) => {
-  selectedRange.value = range
-  const now = new Date()
-
-  switch (range) {
-    case 'today':
-      startDate.value = now.toISOString().split('T')[0]
-      endDate.value = now.toISOString().split('T')[0]
-      break
-    case 'week':
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()))
-      startDate.value = weekStart.toISOString().split('T')[0]
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      endDate.value = weekEnd.toISOString().split('T')[0]
-      break
-    case 'month':
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      startDate.value = monthStart.toISOString().split('T')[0]
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      endDate.value = monthEnd.toISOString().split('T')[0]
-      break
-    case 'quarter':
-      const quarter = Math.floor(now.getMonth() / 3)
-      const quarterStart = new Date(now.getFullYear(), quarter * 3, 1)
-      startDate.value = quarterStart.toISOString().split('T')[0]
-      const quarterEnd = new Date(now.getFullYear(), (quarter + 1) * 3, 0)
-      endDate.value = quarterEnd.toISOString().split('T')[0]
-      break
-    case 'year':
-      const yearStart = new Date(now.getFullYear(), 0, 1)
-      startDate.value = yearStart.toISOString().split('T')[0]
-      const yearEnd = new Date(now.getFullYear(), 11, 31)
-      endDate.value = yearEnd.toISOString().split('T')[0]
-      break
-    case 'custom':
-      // 保持当前日期选择
-      break
-  }
-
-  // 触发数据更新
-  updateDataByTimeRange()
+const toISODate = (date: Date) => {
+  return date.toISOString().split('T')[0] || ''
 }
+
+const normalizeDateRange = () => {
+  if (!startDate.value || !endDate.value) return
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return
+  if (end.getTime() < start.getTime()) {
+    const tmp = startDate.value
+    startDate.value = endDate.value
+    endDate.value = tmp
+  }
+}
+
+const validateDateRange = () => {
+  dateRangeError.value = ''
+  if (!startDate.value || !endDate.value) return false
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    dateRangeError.value = '日期格式不合法'
+    return false
+  }
+  const startMs = Math.min(start.getTime(), end.getTime())
+  const endMs = Math.max(start.getTime(), end.getTime())
+  const days = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1
+  if (days > DATE_CONFIG.MAX_RANGE_DAYS) {
+    dateRangeError.value = `日期范围过大（最多${DATE_CONFIG.MAX_RANGE_DAYS}天）`
+    return false
+  }
+  return true
+}
+
+const dateRangeLabel = computed(() => {
+  if (!startDate.value || !endDate.value) return '请选择日期'
+  return `${startDate.value} 至 ${endDate.value}`
+})
+
+const dateRangeDuration = computed(() => {
+  if (!startDate.value || !endDate.value) return '请选择日期'
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '请选择日期'
+  const startMs = Math.min(start.getTime(), end.getTime())
+  const endMs = Math.max(start.getTime(), end.getTime())
+  const days = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1
+  return `${Math.max(days, 1)}天`
+})
 
 // 更新自定义日期范围
 const updateCustomDateRange = () => {
   if (startDate.value && endDate.value) {
-    selectedRange.value = 'custom'
+    normalizeDateRange()
+    if (!validateDateRange()) return
     updateDataByTimeRange()
   }
 }
 
 // 根据时间范围更新数据
 const updateDataByTimeRange = () => {
-  console.log('更新数据，时间范围:', selectedRange.value, '开始日期:', startDate.value, '结束日期:', endDate.value)
-  // 加载对应时间范围的数据
   loadData()
 }
 
@@ -728,26 +648,7 @@ const updateDataByTimeRange = () => {
 const mapViewMode = ref<'heatmap' | 'flow' | 'markers'>('markers')
 
 // 热力图数据
-const heatmapData = computed(() => {
-  // 生成模拟热力图数据
-  const stations = ['成都东', '重庆北', '内江北', '资阳北', '永川东']
-  const times = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
-
-  return stations.map((station, rowIndex) => {
-    return times.map((time, colIndex) => {
-      const baseValue = 1000 + Math.random() * 5000
-      const timeFactor = colIndex < 2 ? 0.3 : colIndex < 4 ? 0.7 : 1.0
-      const stationFactor = rowIndex < 2 ? 1.2 : rowIndex < 4 ? 0.8 : 1.0
-      const value = Math.round(baseValue * timeFactor * stationFactor)
-
-      return {
-        value,
-        time,
-        label: `${station}站`
-      }
-    })
-  })
-})
+const heatmapData = ref<HeatMapCell[][]>([])
 
 // 流向图数据
 const flowData = ref([
@@ -764,10 +665,24 @@ const changeMapViewMode = (mode: 'heatmap' | 'flow' | 'markers') => {
   mapViewMode.value = mode
 }
 
-// 初始化时间范围
-onMounted(() => {
-  selectTimeRange('today')
-})
+const initDefaultDateRange = async () => {
+  try {
+    const stats = await apiService.getDataStats()
+    const maxDate = stats?.dateRange?.maxDate
+    const anchor = maxDate ? new Date(maxDate) : new Date()
+    const end = new Date(anchor)
+    const start = new Date(anchor)
+    start.setDate(start.getDate() - 29)
+    startDate.value = toISODate(start)
+    endDate.value = toISODate(end)
+  } catch {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(start.getDate() - 29)
+    startDate.value = toISODate(start)
+    endDate.value = toISODate(end)
+  }
+}
 
 // KPI数据
 const kpiData = ref<KpiData>({
@@ -792,24 +707,31 @@ const getCurrentTimeRange = (): TimeRange => {
   return {
     startDate: startDate.value,
     endDate: endDate.value,
-    rangeType: selectedRange.value
+    rangeType: 'custom'
   }
 }
 
 // 加载数据
 const loadData = async () => {
+  if (isUnmounted.value) return
+  if (!validateDateRange()) return
+  
   try {
     isLoading.value = true
     const timeRange = getCurrentTimeRange()
 
-    // 并行加载所有数据 - 使用模拟数据，因为Django后端没有这些API端点
-    const [kpiResponse, stationsResponse, linesResponse, trendResponse, timePeriodResponse] = await Promise.all([
+    // 并行加载所有数据 - 使用模拟数据
+    const heatmapPromise = apiService.getHeatmap(timeRange).catch(() => [] as HeatMapCell[][])
+    const [kpiResponse, stationsResponse, linesResponse, trendResponse, timePeriodResponse, heatmapResponse] = await Promise.all([
       mockService.getKpiData(timeRange),
       mockService.getStations(timeRange),
       mockService.getLines(timeRange),
       mockService.getTrendData(timeRange, 'hourly'),
-      mockService.getTimePeriodData(timeRange)
+      mockService.getTimePeriodData(timeRange),
+      heatmapPromise
     ])
+
+    if (isUnmounted.value) return
 
     // 更新数据
     kpiData.value = kpiResponse
@@ -817,28 +739,31 @@ const loadData = async () => {
     lineLoads.value = linesResponse
     trendData.value = trendResponse
     timePeriodsData.value = timePeriodResponse
+    heatmapData.value = heatmapResponse
 
   } catch (error) {
     console.error('加载数据失败:', error)
     // 保持模拟数据作为回退
   } finally {
-    isLoading.value = false
+    if (!isUnmounted.value) {
+      isLoading.value = false
+    }
   }
 }
 
 // 刷新数据
 const refreshData = async () => {
-  if (isRefreshing.value) return
+  if (isRefreshing.value || isUnmounted.value) return
 
   isRefreshing.value = true
 
   try {
-    const timeRange = getCurrentTimeRange()
-
     // 调用API刷新数据 - 使用模拟数据
     // await dataService.refreshData(timeRange)
     // 模拟刷新延迟
     await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    if (isUnmounted.value) return
 
     // 重新加载数据
     await loadData()
@@ -846,41 +771,23 @@ const refreshData = async () => {
     console.error('刷新数据失败:', error)
     // 可以在这里添加用户友好的错误提示
   } finally {
-    isRefreshing.value = false
+    if (!isUnmounted.value) {
+      isRefreshing.value = false
+    }
   }
 }
 
 // 初始加载
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  await initDefaultDateRange()
+  await loadData()
 })
-
-// 模拟数据 - 地图站点
-const mockStations = ref([
-  { id: 1, name: '成都', size: 'large', style: 'left: 30%; top: 40%;' },
-  { id: 2, name: '重庆', size: 'large', style: 'left: 60%; top: 60%;' },
-  { id: 3, name: '内江', size: 'medium', style: 'left: 40%; top: 50%;' },
-  { id: 4, name: '资阳', size: 'small', style: 'left: 35%; top: 45%;' },
-  { id: 5, name: '永川', size: 'small', style: 'left: 55%; top: 55%;' },
-  { id: 6, name: '荣昌', size: 'small', style: 'left: 50%; top: 58%;' }
-])
-
-// 模拟数据 - 趋势图（已移除，使用API数据）
-
-// 模拟数据 - 站点排名
-const topStations = ref([
-  { id: 1, rank: 1, name: '成都东站', code: 'CDW', count: 125678, percentage: 100 },
-  { id: 2, rank: 2, name: '重庆北站', code: 'CUW', count: 98765, percentage: 78 },
-  { id: 3, rank: 3, name: '内江北站', code: 'NKW', count: 65432, percentage: 52 },
-  { id: 4, rank: 4, name: '资阳北站', code: 'ZYW', count: 54321, percentage: 43 },
-  { id: 5, rank: 5, name: '永川东站', code: 'YCW', count: 43210, percentage: 34 }
-])
 
 // 线路负载分析
 const loadMetric = ref<'occupancy' | 'load' | 'efficiency'>('occupancy')
 
 // 数据变量
-const stationsData = ref<Station[]>([])
+const stationsData = ref<StationSummary[]>([])
 const lineLoads = ref<Line[]>([])
 const trendData = ref<TrendData[]>([])
 const timePeriodsData = ref<TimePeriodData[]>([])
@@ -976,6 +883,7 @@ const getLoadStatusClass = (value: number) => {
 // 平均上座率
 const avgOccupancyRate = computed(() => {
   const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
+  if (data.length === 0) return 0
   const sum = data.reduce((total, line) => total + line.occupancyRate, 0)
   return Math.round(sum / data.length)
 })
@@ -983,6 +891,7 @@ const avgOccupancyRate = computed(() => {
 // 平均满载率
 const avgLoadRate = computed(() => {
   const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
+  if (data.length === 0) return 0
   const sum = data.reduce((total, line) => total + line.loadRate, 0)
   return Math.round(sum / data.length)
 })
@@ -1000,8 +909,10 @@ const avgLoadTrend = computed(() => {
 // 最高负载线路
 const peakLine = computed(() => {
   const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
-  const line = data.reduce((max, l) =>
-    l.occupancyRate > max.occupancyRate ? l : max, data[0])
+  if (data.length === 0) {
+    return { name: '无数据', value: 0 }
+  }
+  const line = data.reduce((max, l) => (l.occupancyRate > max.occupancyRate ? l : max))
   return {
     name: line.name,
     value: line.occupancyRate
@@ -1011,6 +922,7 @@ const peakLine = computed(() => {
 // 优化潜力
 const optimizationPotential = computed(() => {
   const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
+  if (data.length === 0) return 0
   const maxOccupancy = Math.max(...data.map(l => l.occupancyRate))
   const minOccupancy = Math.min(...data.map(l => l.occupancyRate))
   return Math.round((maxOccupancy - minOccupancy) / 2)

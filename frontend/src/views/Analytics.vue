@@ -41,52 +41,8 @@
       <div class="filter-container">
         <div class="filter-group">
           <label class="filter-label">时间范围</label>
-          <div class="filter-buttons">
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'today' }"
-              @click="selectTimeRange('today')"
-            >
-              今天
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'week' }"
-              @click="selectTimeRange('week')"
-            >
-              本周
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'month' }"
-              @click="selectTimeRange('month')"
-            >
-              本月
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'quarter' }"
-              @click="selectTimeRange('quarter')"
-            >
-              本季度
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'year' }"
-              @click="selectTimeRange('year')"
-            >
-              本年
-            </button>
-            <button
-              class="filter-btn touch-target touch-feedback"
-              :class="{ active: selectedRange === 'custom' }"
-              @click="selectTimeRange('custom')"
-            >
-              自定义
-            </button>
-          </div>
         </div>
-        <div v-if="selectedRange === 'custom'" class="date-picker">
+        <div class="date-picker">
           <input
             v-model="startDate"
             type="date"
@@ -101,10 +57,11 @@
             @change="updateCustomDateRange"
           />
         </div>
-        <div v-if="selectedRange !== 'custom'" class="filter-stats">
+        <span v-if="dateRangeError" class="date-error">{{ dateRangeError }}</span>
+        <div class="filter-stats">
           <span class="stat-label">统计周期：</span>
-          <span class="stat-value">{{ timeRangeLabel }}</span>
-          <span class="stat-duration">（{{ timeRangeDuration }}）</span>
+          <span class="stat-value">{{ dateRangeLabel }}</span>
+          <span class="stat-duration">（{{ dateRangeDuration }}）</span>
         </div>
       </div>
     </div>
@@ -144,7 +101,7 @@
           </div>
         </div>
         <div class="kpi-footer">
-          <span class="kpi-period">{{ timeRangeLabel }}</span>
+          <span class="kpi-period">{{ dateRangeLabel }}</span>
         </div>
       </div>
 
@@ -179,7 +136,7 @@
           </div>
         </div>
         <div class="kpi-footer">
-          <span class="kpi-period">{{ timeRangeLabel }}</span>
+          <span class="kpi-period">{{ dateRangeLabel }}</span>
         </div>
       </div>
 
@@ -247,7 +204,7 @@
           </div>
         </div>
         <div class="kpi-footer">
-          <span class="kpi-period">{{ timeRangeLabel }}</span>
+          <span class="kpi-period">{{ dateRangeLabel }}</span>
         </div>
       </div>
     </div>
@@ -292,7 +249,7 @@
         <div class="card-body">
           <TrendChart
             title="客流趋势"
-            :data="trendData"
+            :data="trendChartData"
           />
         </div>
       </div>
@@ -683,16 +640,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { usePassengerStore } from '@/stores/passenger';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { format, subDays } from 'date-fns';
+import { apiService, type HeatMapCell } from '@/services/api';
+import type { TrendData } from '@/services/api';
+import { DATE_CONFIG } from '@/config';
 
 // 组件导入
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import AnimatedNumber from '@/components/ui/AnimatedNumber.vue';
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue';
-import FlowTrendChart from '@/components/passenger/FlowTrendChart.vue';
 import StationRankingTable from '@/components/passenger/StationRankingTable.vue';
-import TimeDistributionChart from '@/components/passenger/TimeDistributionChart.vue';
+import TrendChart from '@/components/charts/TrendChart.vue';
+import HeatMapChart from '@/components/charts/HeatMapChart.vue';
+import StationMap from '@/components/maps/StationMap.vue';
 
 // Store
 const passengerStore = usePassengerStore();
@@ -700,9 +660,9 @@ const passengerStore = usePassengerStore();
 // 状态
 const isLoading = ref(false);
 const isRefreshing = ref(false);
-const selectedRange = ref<'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>('week');
 const startDate = ref('');
 const endDate = ref('');
+const dateRangeError = ref('');
 
 // 图表状态
 const trendFrequency = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>('daily');
@@ -711,6 +671,8 @@ const loadMetric = ref<'occupancy' | 'load' | 'efficiency'>('occupancy');
 const mapViewMode = ref<'heatmap' | 'flow' | 'markers'>('heatmap');
 const timeDistributionType = ref<'hourly' | 'daily' | 'weekly'>('hourly');
 const forecastDays = ref<7 | 14 | 30>(7);
+
+const heatmapData = ref<HeatMapCell[][]>([]);
 
 // 工具提示状态
 const lineTooltip = ref({
@@ -721,43 +683,54 @@ const lineTooltip = ref({
 });
 
 // 计算属性
-const timeRangeLabel = computed(() => {
-  const now = new Date();
-  switch (selectedRange.value) {
-    case 'today':
-      return format(now, 'yyyy年MM月dd日', { locale: zhCN });
-    case 'week':
-      const weekStart = startOfWeek(now, { locale: zhCN });
-      const weekEnd = endOfWeek(now, { locale: zhCN });
-      return `${format(weekStart, 'MM/dd')} - ${format(weekEnd, 'MM/dd')}`;
-    case 'month':
-      return format(now, 'yyyy年MM月', { locale: zhCN });
-    case 'quarter':
-      const quarterStart = startOfQuarter(now);
-      const quarterEnd = endOfQuarter(now);
-      return `${format(quarterStart, 'MM/dd')} - ${format(quarterEnd, 'MM/dd')}`;
-    case 'year':
-      return format(now, 'yyyy年', { locale: zhCN });
-    case 'custom':
-      if (startDate.value && endDate.value) {
-        return `${format(new Date(startDate.value), 'MM/dd')} - ${format(new Date(endDate.value), 'MM/dd')}`;
-      }
-      return '自定义范围';
-    default:
-      return '';
+const normalizeDateRange = () => {
+  if (!startDate.value || !endDate.value) return;
+  const start = new Date(startDate.value);
+  const end = new Date(endDate.value);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+  if (end.getTime() < start.getTime()) {
+    const tmp = startDate.value;
+    startDate.value = endDate.value;
+    endDate.value = tmp;
   }
+};
+
+const validateDateRange = () => {
+  dateRangeError.value = ''
+  if (!startDate.value || !endDate.value) {
+    dateRangeError.value = '请选择开始和结束日期'
+    return false
+  }
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    dateRangeError.value = '日期格式不合法'
+    return false
+  }
+  const startMs = Math.min(start.getTime(), end.getTime())
+  const endMs = Math.max(start.getTime(), end.getTime())
+  const days = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1
+  if (days > DATE_CONFIG.MAX_RANGE_DAYS) {
+    dateRangeError.value = `日期范围过大（最多${DATE_CONFIG.MAX_RANGE_DAYS}天）`
+    return false
+  }
+  return true
+}
+
+const dateRangeLabel = computed(() => {
+  if (!startDate.value || !endDate.value) return '请选择日期';
+  return `${startDate.value} 至 ${endDate.value}`;
 });
 
-const timeRangeDuration = computed(() => {
-  switch (selectedRange.value) {
-    case 'today': return '1天';
-    case 'week': return '7天';
-    case 'month': return '约30天';
-    case 'quarter': return '约90天';
-    case 'year': return '365天';
-    case 'custom': return '自定义';
-    default: return '';
-  }
+const dateRangeDuration = computed(() => {
+  if (!startDate.value || !endDate.value) return '请选择日期';
+  const start = new Date(startDate.value);
+  const end = new Date(endDate.value);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '请选择日期';
+  const startMs = Math.min(start.getTime(), end.getTime());
+  const endMs = Math.max(start.getTime(), end.getTime());
+  const days = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
+  return `${Math.max(days, 1)}天`;
 });
 
 // KPI数据（模拟）
@@ -790,11 +763,6 @@ const kpiData = computed(() => {
   // 找出最繁忙的站点
   const peakStation = rankings.length > 0 ? rankings[0] : null;
 
-  // 找出最繁忙的线路
-  const peakLine = loads.length > 0 ? loads.reduce((max, line) =>
-    line.totalPassengers > max.totalPassengers ? line : max
-  ) : null;
-
   return {
     totalPassengers: trends.total || 0,
     avgPassengers: trends.average || 0,
@@ -810,25 +778,18 @@ const kpiData = computed(() => {
   };
 });
 
-// 趋势数据
-const trendData = computed(() => {
-  // 使用store中的数据
+const trendChartData = computed<TrendData[]>(() => {
   const trends = passengerStore.flowTrends;
-
-  if (!trends) {
-    // 如果没有数据，返回默认值
+  if (!trends || trends.data.length === 0) return [];
+  return trends.data.map((p) => {
+    const inbound = Math.round(p.value * 0.55);
     return {
-      granularity: 'day' as const,
-      data: [],
-      total: 0,
-      average: 0,
-      max: 0,
-      min: 0,
-      growthRate: 0
+      time: p.time,
+      total: p.value,
+      inbound,
+      outbound: Math.max(0, p.value - inbound)
     };
-  }
-
-  return trends;
+  });
 });
 
 // 站点排名数据
@@ -844,8 +805,20 @@ const stationRankings = computed(() => {
   return rankings;
 });
 
+type LineLoadView = {
+  id: number;
+  name: string;
+  code: string;
+  totalPassengers: number;
+  capacity: number;
+  occupancyRate: number;
+  loadRate: number;
+  efficiency: number;
+  trend: number;
+};
+
 // 线路负载数据
-const lineLoads = computed(() => {
+const lineLoads = computed<LineLoadView[]>(() => {
   // 使用store中的数据
   const loads = passengerStore.lineLoads;
 
@@ -854,18 +827,20 @@ const lineLoads = computed(() => {
     return [];
   }
 
-  return loads;
-});
-
-// 热力图数据（模拟）
-const heatmapData = computed(() => {
-  return {
-    data: Array.from({ length: 50 }, (_, i) => ({
-      x: `站点${i + 1}`,
-      y: Math.floor(Math.random() * 24).toString(),
-      value: Math.floor(Math.random() * 1000)
-    }))
-  };
+  return loads.map((line) => {
+    const loadRatePercent = Math.round((line.loadRate || 0) * 100);
+    return {
+      id: line.lineId,
+      name: line.lineName,
+      code: `L${line.lineId}`,
+      totalPassengers: line.totalPassengers,
+      capacity: line.capacity,
+      occupancyRate: loadRatePercent,
+      loadRate: loadRatePercent,
+      efficiency: loadRatePercent,
+      trend: 0
+    };
+  });
 });
 
 // 流向数据（模拟）
@@ -922,15 +897,10 @@ const lineTooltipStyle = computed(() => {
 });
 
 // 方法
-const selectTimeRange = (range: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom') => {
-  selectedRange.value = range;
-  if (range !== 'custom') {
-    loadData();
-  }
-};
-
 const updateCustomDateRange = () => {
   if (startDate.value && endDate.value) {
+    normalizeDateRange();
+    if (!validateDateRange()) return;
     loadData();
   }
 };
@@ -1016,8 +986,25 @@ const getTimeDistributionClass = (percentage: number) => {
 const loadData = async () => {
   isLoading.value = true;
   try {
-    // 调用store的方法加载综合分析数据
-    await passengerStore.fetchComprehensiveAnalysis();
+    normalizeDateRange();
+    if (!validateDateRange()) return;
+    passengerStore.setTimeRange(startDate.value, endDate.value);
+
+    await Promise.all([
+      passengerStore.fetchComprehensiveAnalysis(),
+      apiService.getHeatmap({
+        startDate: startDate.value,
+        endDate: endDate.value,
+        rangeType: 'custom'
+      })
+        .then((data) => {
+          heatmapData.value = data;
+        })
+        .catch((error) => {
+          console.error('加载热力图失败:', error);
+          heatmapData.value = [];
+        })
+    ]);
   } catch (error) {
     console.error('加载数据失败:', error);
   } finally {
@@ -1026,15 +1013,22 @@ const loadData = async () => {
 };
 
 // 初始化
-onMounted(() => {
-  // 设置默认日期范围
-  const today = new Date();
-  const weekAgo = subDays(today, 7);
-  startDate.value = format(weekAgo, 'yyyy-MM-dd');
-  endDate.value = format(today, 'yyyy-MM-dd');
+onMounted(async () => {
+  try {
+    const stats = await apiService.getDataStats();
+    const maxDate = stats?.dateRange?.maxDate;
+    const anchor = maxDate ? new Date(maxDate) : new Date();
+    const start = subDays(anchor, 29);
+    startDate.value = format(start, 'yyyy-MM-dd');
+    endDate.value = format(anchor, 'yyyy-MM-dd');
+  } catch {
+    const anchor = new Date();
+    const start = subDays(anchor, 29);
+    startDate.value = format(start, 'yyyy-MM-dd');
+    endDate.value = format(anchor, 'yyyy-MM-dd');
+  }
 
-  // 加载初始数据
-  loadData();
+  await loadData();
 });
 </script>
 
@@ -1220,6 +1214,12 @@ onMounted(() => {
         color: var(--color-text-tertiary);
         font-size: var(--font-size-base);
       }
+    }
+
+    .date-error {
+      margin-top: var(--spacing-2);
+      font-size: var(--font-size-sm);
+      color: var(--color-error);
     }
 
     .filter-stats {

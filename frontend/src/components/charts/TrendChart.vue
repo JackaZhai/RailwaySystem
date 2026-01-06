@@ -99,7 +99,7 @@
                 :cy="point.y"
                 r="4"
                 class="data-point total"
-                @mouseenter="showTooltip('total', index)"
+                @mouseenter="showTooltip(index)"
                 @mouseleave="hideTooltip"
               />
             </svg>
@@ -118,7 +118,7 @@
                 :cy="point.y"
                 r="4"
                 class="data-point inbound"
-                @mouseenter="showTooltip('inbound', index)"
+                @mouseenter="showTooltip(index)"
                 @mouseleave="hideTooltip"
               />
             </svg>
@@ -137,7 +137,7 @@
                 :cy="point.y"
                 r="4"
                 class="data-point outbound"
-                @mouseenter="showTooltip('outbound', index)"
+                @mouseenter="showTooltip(index)"
                 @mouseleave="hideTooltip"
               />
             </svg>
@@ -326,7 +326,7 @@ const yAxisLabels = computed(() => {
 })
 
 // 统计数据
-const stats = computed(() => {
+const stats = computed<Stats>(() => {
   const data = trendData.value
   const total = data.reduce((sum, d) => sum + d.total, 0)
   const inbound = data.reduce((sum, d) => sum + d.inbound, 0)
@@ -338,7 +338,12 @@ const stats = computed(() => {
   const outboundTrend = Math.round((Math.random() - 0.5) * 18)
 
   // 找到高峰时段
-  const peakData = data.reduce((max, d) => d.total > max.total ? d : max, data[0])
+  const peakData = data.reduce<TrendData>((max, d) => (d.total > max.total ? d : max), {
+    time: '',
+    total: 0,
+    inbound: 0,
+    outbound: 0
+  })
 
   return {
     total,
@@ -414,9 +419,11 @@ const generateMockData = (): TrendData[] => {
         time = `${i.toString().padStart(2, '0')}:00`
         break
       case 'daily':
-        const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-        time = days[i % 7]
-        break
+        {
+          const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+          time = days[i % days.length] ?? ''
+          break
+        }
       case 'weekly':
         time = `第${i + 1}周`
         break
@@ -465,8 +472,9 @@ const formatNumber = (num: number): string => {
 }
 
 // 显示工具提示
-const showTooltip = (type: 'total' | 'inbound' | 'outbound', index: number) => {
+const showTooltip = (index: number) => {
   const data = trendData.value[index]
+  if (!data) return
   tooltip.value = {
     visible: true,
     time: data.time,

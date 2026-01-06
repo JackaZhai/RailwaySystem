@@ -278,7 +278,7 @@ interface TimePeriod {
   trains: number
 }
 
-const props = withDefaults(defineProps<{
+const { title } = withDefaults(defineProps<{
   title?: string
 }>(), {
   title: '客流量分析'
@@ -334,7 +334,7 @@ const peakStation = computed(() => {
   if (topStations.value.length === 0) {
     return { name: '暂无数据', value: 0 }
   }
-  const station = topStations.value.reduce((max, s) => s.total > max.total ? s : max, topStations.value[0])
+  const station = topStations.value.reduce((max, s) => s.total > max.total ? s : max, topStations.value[0]!)
   return {
     name: station.name,
     value: station.total
@@ -349,14 +349,14 @@ const peakPeriod = computed(() => {
   if (timePeriods.value.length === 0) {
     return { id: 0, name: '暂无数据', time: '', passengers: 0, percentage: 0, trains: 0 }
   }
-  return timePeriods.value.reduce((max, p) => p.passengers > max.passengers ? p : max, timePeriods.value[0])
+  return timePeriods.value.reduce((max, p) => p.passengers > max.passengers ? p : max, timePeriods.value[0]!)
 })
 
 const offPeakPeriod = computed(() => {
   if (timePeriods.value.length === 0) {
     return { id: 0, name: '暂无数据', time: '', passengers: 0, percentage: 0, trains: 0 }
   }
-  return timePeriods.value.reduce((min, p) => p.passengers < min.passengers ? p : min, timePeriods.value[0])
+  return timePeriods.value.reduce((min, p) => p.passengers < min.passengers ? p : min, timePeriods.value[0]!)
 })
 
 const peakToOffPeakRatio = computed(() => {
