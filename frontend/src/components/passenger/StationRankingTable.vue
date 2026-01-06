@@ -1,7 +1,7 @@
 <template>
   <div class="station-ranking-table">
     <!-- 表格标题和操作 -->
-    <div class="table-header">
+    <div v-if="showHeader" class="table-header">
       <div class="table-title">
         <h3>{{ title }}</h3>
         <p class="table-subtitle" v-if="subtitle">{{ subtitle }}</p>
@@ -183,6 +183,7 @@ interface Props {
   subtitle?: string;
   columns?: TableColumn[];
   // 显示选项
+  showHeader?: boolean;
   showActions?: boolean;
   showPagination?: boolean;
   pageSize?: number;
@@ -209,6 +210,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   title: '站点客流排名',
   subtitle: '按总客流量排序',
+  showHeader: true,
   showActions: true,
   showPagination: true,
   pageSize: 10,

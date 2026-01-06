@@ -24,10 +24,10 @@ import { passengerService } from '@/services/passengerService';
 
 // 默认时间范围：最近30天
 const getDefaultDateRange = () => {
-  // 默认使用2016年的数据范围，因为这是数据库中的数据时间段
+  // 默认使用2015年的数据范围
   return {
-    startDate: '2016-01-14',
-    endDate: '2016-02-12',
+    startDate: '2015-01-01',
+    endDate: '2015-02-01',
   };
 };
 
@@ -35,6 +35,7 @@ export const usePassengerStore = defineStore('passenger', () => {
   // 状态
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  const dataDateRange = ref<{ minDate: string; maxDate: string } | null>(null);
 
   // 分析参数
   const analysisParams = ref<AnalysisRequest>({
@@ -136,6 +137,7 @@ export const usePassengerStore = defineStore('passenger', () => {
       avgPassengers: 0,
       peakStation: 0
     };
+    dataDateRange.value = null;
     error.value = null;
   };
 
@@ -151,7 +153,8 @@ export const usePassengerStore = defineStore('passenger', () => {
 
   // 设置时间范围
   const setTimeRange = (startDate: string, endDate: string) => {
-    updateAnalysisParams({ startDate, endDate });
+    const clamped = clampDateRange(startDate, endDate);
+    updateAnalysisParams({ startDate: clamped.startDate, endDate: clamped.endDate });
   };
 
   // 设置时间粒度
@@ -179,32 +182,66 @@ export const usePassengerStore = defineStore('passenger', () => {
     try {
       const range = await passengerService.getDataDateRange();
       if (range?.endDate) {
+        dataDateRange.value = {
+          minDate: range.startDate,
+          maxDate: range.endDate
+        };
         // Use the end date from API
         const end = new Date(range.endDate);
         // Calculate start date as 30 days before end date
         const start = subDays(end, 30);
-        
+
+        const clamped = clampDateRange(format(start, 'yyyy-MM-dd'), range.endDate);
         updateAnalysisParams({
-          startDate: format(start, 'yyyy-MM-dd'),
-          endDate: range.endDate,
+          startDate: clamped.startDate,
+          endDate: clamped.endDate,
         });
         return true;
       }
       // Fallback to default range if API returns nothing
+      dataDateRange.value = null;
       updateAnalysisParams({
-        startDate: '2016-01-14',
-        endDate: '2016-02-12',
+        startDate: '2015-01-01',
+        endDate: '2015-02-01',
       });
       return true;
     } catch (err) {
-      console.error('同步日期范围失败:', err);
+      console.error('????????????????????????:', err);
       // Fallback on error
+      dataDateRange.value = null;
       updateAnalysisParams({
-        startDate: '2016-01-14',
-        endDate: '2016-02-12',
+        startDate: '2015-01-01',
+        endDate: '2015-02-01',
       });
       return true;
     }
+  };
+
+  const clampDateRange = (startDate: string, endDate: string) => {
+    if (!dataDateRange.value) {
+      return { startDate, endDate };
+    }
+
+    const min = new Date(dataDateRange.value.minDate);
+    const max = new Date(dataDateRange.value.maxDate);
+    let start = new Date(startDate);
+    let end = new Date(endDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return { startDate, endDate };
+    }
+
+    if (start < min) start = min;
+    if (end > max) end = max;
+
+    if (start > end) {
+      start = end;
+    }
+
+    return {
+      startDate: format(start, 'yyyy-MM-dd'),
+      endDate: format(end, 'yyyy-MM-dd')
+    };
   };
 
   const buildPreviousParams = (params: AnalysisRequest) => {
@@ -404,18 +441,7 @@ export const usePassengerStore = defineStore('passenger', () => {
       const timeDistributionType = options?.timeDistributionType ?? 'period';
 
       // 并行获取所有数据
-      const [
-        trends,
-        rankings,
-        loads,
-        timeDist,
-        timePeriodsData,
-        heatmap,
-        flowLinesData,
-        spatialDist,
-        forecasts,
-        anomalies
-      ] = await Promise.all([
+      const results = await Promise.allSettled([
         passengerService.getFlowTrends(analysisParams.value),
         passengerService.getStationRankings(analysisParams.value),
         passengerService.getLineLoads(analysisParams.value),
@@ -428,7 +454,31 @@ export const usePassengerStore = defineStore('passenger', () => {
         passengerService.getFlowAnomalies(analysisParams.value)
       ]);
 
-      // 更新状态
+      const [
+        trendsRes,
+        rankingsRes,
+        loadsRes,
+        timeDistRes,
+        timePeriodsRes,
+        heatmapRes,
+        flowLinesRes,
+        spatialRes,
+        forecastsRes,
+        anomaliesRes
+      ] = results;
+
+      const trends = trendsRes.status === 'fulfilled' ? trendsRes.value : null;
+      const rankings = rankingsRes.status === 'fulfilled' ? rankingsRes.value : [];
+      const loads = loadsRes.status === 'fulfilled' ? loadsRes.value : [];
+      const timeDist = timeDistRes.status === 'fulfilled' ? timeDistRes.value : [];
+      const timePeriodsData = timePeriodsRes.status === 'fulfilled' ? timePeriodsRes.value : [];
+      const heatmap = heatmapRes.status === 'fulfilled' ? heatmapRes.value : [];
+      const flowLinesData = flowLinesRes.status === 'fulfilled' ? flowLinesRes.value : [];
+      const spatialDist = spatialRes.status === 'fulfilled' ? spatialRes.value : [];
+      const forecasts = forecastsRes.status === 'fulfilled' ? forecastsRes.value : [];
+      const anomalies = anomaliesRes.status === 'fulfilled' ? anomaliesRes.value : [];
+
+      // ???????
       flowTrends.value = trends;
       stationRankings.value = rankings;
       lineLoads.value = loads;
@@ -442,8 +492,8 @@ export const usePassengerStore = defineStore('passenger', () => {
 
       const paramsSnapshot = JSON.stringify(analysisParams.value);
       const currentPeak = rankings[0]?.totalPassengers || 0;
-      const currentAvg = trends.average || 0;
-      const currentTotal = trends.total || 0;
+      const currentAvg = trends?.average || 0;
+      const currentTotal = trends?.total || 0;
 
       void (async () => {
         const previousParams = buildPreviousParams(analysisParams.value);

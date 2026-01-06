@@ -13,7 +13,7 @@
     <div class="page-header">
       <div class="header-content">
         <h1 class="page-title">总览</h1>
-        <p class="page-description">系统核心指标和实时监控</p>
+        <p class="page-description">系统核心指标与客流分析概览</p>
       </div>
       <div class="header-actions">
         <button class="btn btn-primary touch-target touch-feedback" :disabled="isRefreshing" @click="refreshData">
@@ -257,366 +257,92 @@
           <div class="card-actions">
             <button
               class="card-action-btn"
-              :class="{ active: mapViewMode === 'heatmap' }"
-              @click="changeMapViewMode('heatmap')"
+              :class="{ active: spatialView === 'map' }"
+              @click="spatialView = 'map'"
             >
-              热力图
+              地图
             </button>
             <button
               class="card-action-btn"
-              :class="{ active: mapViewMode === 'flow' }"
-              @click="changeMapViewMode('flow')"
+              :class="{ active: spatialView === 'trend' }"
+              @click="spatialView = 'trend'"
             >
-              流向图
-            </button>
-            <button
-              class="card-action-btn"
-              :class="{ active: mapViewMode === 'markers' }"
-              @click="changeMapViewMode('markers')"
-            >
-              站点标记
+              客流趋势
             </button>
           </div>
         </div>
         <div class="card-body">
-          <!-- 热力图模式 -->
-          <div v-if="mapViewMode === 'heatmap'" class="heatmap-container">
-            <HeatMapChart
-              title="站点客流热力图"
-              :data="heatmapData"
+          <!-- 流向图（高德地图） -->
+          <div v-if="spatialView === 'map'" class="station-map-container">
+            <div v-if="!mapHasFlows" class="map-empty">暂无流向数据</div>
+            <GaodeMap
+              map-id="dashboard-flow-map"
+              class-name="gaode-map-container"
+              :fit-view-to-markers="true"
+              :show-controls="true"
             />
           </div>
-
-          <!-- 流向图模式 -->
-          <div v-if="mapViewMode === 'flow'" class="flow-container">
-            <div class="flow-placeholder">
-              <div class="flow-mock">
-                <div class="flow-map">
-                  <div class="flow-grid">
-                    <div v-for="i in 10" :key="i" class="grid-line"></div>
-                  </div>
-                  <div
-                    v-for="flow in flowData"
-                    :key="flow.id"
-                    class="flow-line"
-                    :style="flow.style"
-                  >
-                    <div class="flow-arrow"></div>
-                    <div class="flow-label">{{ flow.label }}</div>
-                  </div>
-                </div>
-                <div class="flow-legend">
-                  <div class="legend-item">
-                    <div class="legend-line high"></div>
-                    <span>高流量</span>
-                  </div>
-                  <div class="legend-item">
-                    <div class="legend-line medium"></div>
-                    <span>中流量</span>
-                  </div>
-                  <div class="legend-item">
-                    <div class="legend-line low"></div>
-                    <span>低流量</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 站点标记模式 -->
-          <div v-if="mapViewMode === 'markers'" class="station-map-container">
-            <StationMap
-              title="成渝地区铁路站点分布"
+          <div v-else class="trend-panel">
+            <TrendChart
+              title="客流趋势分析"
+              :data="trendData"
+              :granularity="trendGranularity"
+              flat
+              @granularity-change="handleTrendGranularityChange"
             />
           </div>
         </div>
       </div>
 
-      <!-- 客流趋势图 -->
-      <div class="chart-card">
-        <div class="card-body">
-          <TrendChart
-            title="客流趋势分析"
-          />
-        </div>
-      </div>
-
-      <!-- 客流量分析 -->
-      <div class="chart-card">
+      <div class="chart-card analysis-card">
         <div class="card-body">
           <PassengerFlowAnalysis
             title="客流量深度分析"
+            :start-date="startDate"
+            :end-date="endDate"
           />
         </div>
       </div>
 
-      <!-- 线路负载分析 -->
-      <div class="chart-card">
-        <div class="card-header">
-          <h3 class="card-title">线路负载分析</h3>
-          <div class="card-actions">
-            <button
-              class="card-action-btn"
-              :class="{ active: loadMetric === 'occupancy' }"
-              @click="changeLoadMetric('occupancy')"
-            >
-              上座率
-            </button>
-            <button
-              class="card-action-btn"
-              :class="{ active: loadMetric === 'load' }"
-              @click="changeLoadMetric('load')"
-            >
-              满载率
-            </button>
-            <button
-              class="card-action-btn"
-              :class="{ active: loadMetric === 'efficiency' }"
-              @click="changeLoadMetric('efficiency')"
-            >
-              运营效率
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="load-analysis">
-            <div class="load-chart">
-              <div class="chart-container">
-                <div class="load-bars">
-                  <div
-                    v-for="line in (lineLoads.length > 0 ? lineLoads : lineLoadsData)"
-                    :key="line.id"
-                    class="load-bar-item"
-                    @mouseenter="showLineTooltip(line)"
-                    @mouseleave="hideLineTooltip"
-                  >
-                    <div class="bar-label">
-                      <div class="line-name">{{ line.name }}</div>
-                      <div class="line-code">{{ line.code }}</div>
-                    </div>
-                    <div class="bar-container">
-                      <div class="bar-track">
-                        <div
-                          class="bar-fill"
-                          :style="{ width: getLineMetric(line) + '%' }"
-                          :class="getLoadStatusClass(getLineMetric(line))"
-                        >
-                          <span class="bar-value">{{ getLineMetric(line) }}%</span>
-                        </div>
-                      </div>
-                      <div class="bar-comparison">
-                        <div class="comparison-label">行业平均</div>
-                        <div class="comparison-bar">
-                          <div class="comparison-fill" :style="{ width: line.industryAverage + '%' }"></div>
-                        </div>
-                        <div class="comparison-value">{{ line.industryAverage }}%</div>
-                      </div>
-                    </div>
-                    <div class="bar-stats">
-                      <div class="stat">
-                        <div class="stat-label">上座率</div>
-                        <div class="stat-value">{{ line.occupancyRate }}%</div>
-                      </div>
-                      <div class="stat">
-                        <div class="stat-label">满载率</div>
-                        <div class="stat-value">{{ line.loadRate }}%</div>
-                      </div>
-                      <div class="stat">
-                        <div class="stat-label">运营效率</div>
-                        <div class="stat-value">{{ line.efficiency }}%</div>
-                      </div>
-                    </div>
-                    <div class="bar-trend" :class="line.trend >= 0 ? 'positive' : 'negative'">
-                      <span>{{ line.trend >= 0 ? '+' : '' }}{{ line.trend }}%</span>
-                      <svg v-if="line.trend >= 0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                      <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="load-summary">
-              <div class="summary-card">
-                <div class="summary-value">{{ avgOccupancyRate }}%</div>
-                <div class="summary-label">平均上座率</div>
-                <div class="summary-trend" :class="avgOccupancyTrend >= 0 ? 'positive' : 'negative'">
-                  <span>{{ avgOccupancyTrend >= 0 ? '+' : '' }}{{ avgOccupancyTrend }}%</span>
-                  <svg v-if="avgOccupancyTrend >= 0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-value">{{ avgLoadRate }}%</div>
-                <div class="summary-label">平均满载率</div>
-                <div class="summary-trend" :class="avgLoadTrend >= 0 ? 'positive' : 'negative'">
-                  <span>{{ avgLoadTrend >= 0 ? '+' : '' }}{{ avgLoadTrend }}%</span>
-                  <svg v-if="avgLoadTrend >= 0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M7 7L17 17M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-value">{{ peakLine.name }}</div>
-                <div class="summary-label">最高负载线路</div>
-                <div class="summary-detail">{{ peakLine.value }}%</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-value">{{ optimizationPotential }}%</div>
-                <div class="summary-label">优化潜力</div>
-                <div class="summary-detail">可提升空间</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 线路负载工具提示 -->
-      <div
-        v-if="lineTooltip.visible"
-        class="line-tooltip"
-        :style="lineTooltipStyle"
-      >
-        <div class="tooltip-header">
-          <strong>{{ lineTooltip.line.name }} ({{ lineTooltip.line.code }})</strong>
-        </div>
-        <div class="tooltip-content">
-          <div class="tooltip-row">
-            <span class="tooltip-label">上座率：</span>
-            <span class="tooltip-value">{{ lineTooltip.line.occupancyRate }}%</span>
-          </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">满载率：</span>
-            <span class="tooltip-value">{{ lineTooltip.line.loadRate }}%</span>
-          </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">运营效率：</span>
-            <span class="tooltip-value">{{ lineTooltip.line.efficiency }}%</span>
-          </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">行业平均：</span>
-            <span class="tooltip-value">{{ lineTooltip.line.industryAverage }}%</span>
-          </div>
-          <div class="tooltip-row">
-            <span class="tooltip-label">趋势：</span>
-            <span class="tooltip-value" :class="lineTooltip.line.trend >= 0 ? 'positive' : 'negative'">
-              {{ lineTooltip.line.trend >= 0 ? '+' : '' }}{{ lineTooltip.line.trend }}%
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- 数据表格 -->
-    <div class="data-table-section">
-      <div class="section-header">
-        <h3 class="section-title">实时数据</h3>
-        <div class="section-actions">
-          <button class="btn btn-outline btn-sm">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            导出CSV
-          </button>
-          <button class="btn btn-primary btn-sm">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 12V7H3V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M3 17H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M9 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M15 12V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            查看详情
-          </button>
-        </div>
-      </div>
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>车次</th>
-              <th>出发站</th>
-              <th>到达站</th>
-              <th>出发时间</th>
-              <th>到达时间</th>
-              <th>上座率</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="train in recentTrains" :key="train.id">
-              <td>
-                <div class="train-code">{{ train.code }}</div>
-                <div class="train-type">{{ train.type }}</div>
-              </td>
-              <td>{{ train.departureStation }}</td>
-              <td>{{ train.arrivalStation }}</td>
-              <td>{{ train.departureTime }}</td>
-              <td>{{ train.arrivalTime }}</td>
-              <td>
-                <div class="occupancy">
-                  <div class="occupancy-bar">
-                    <div class="occupancy-fill" :style="{ width: train.occupancy + '%' }"></div>
-                  </div>
-                  <span class="occupancy-percentage">{{ train.occupancy }}%</span>
-                </div>
-              </td>
-              <td>
-                <span class="status-badge" :class="train.status">{{ train.statusText }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="table-footer">
-        <div class="pagination">
-          <button class="pagination-btn" :disabled="currentPage === 1">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <span class="pagination-info">第 {{ currentPage }} 页，共 {{ totalPages }} 页</span>
-          <button class="pagination-btn" :disabled="currentPage === totalPages">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import AnimatedNumber from '@/components/ui/AnimatedNumber.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
-import HeatMapChart from '@/components/charts/HeatMapChart.vue'
-import StationMap from '@/components/maps/StationMap.vue'
+import GaodeMap from '@/components/map/GaodeMap.vue'
 import TrendChart from '@/components/charts/TrendChart.vue'
 import PassengerFlowAnalysis from '@/components/analytics/PassengerFlowAnalysis.vue'
-import { mockService, type TimeRange, type KpiData, type Station, type Line, type TrendData, type TimePeriodData } from '@/services/api'
+import { apiService, type TimeRange, type KpiData, type Station, type TrendData, type TimePeriodData } from '@/services/api'
+import { usePassengerStore } from '@/stores/passenger'
+import { useMapStore } from '@/stores/map'
+import { calculateMarkerSize, calculateMarkerColor, createFlowLine, calculateCenter } from '@/utils/mapUtils'
+
+const passengerStore = usePassengerStore()
+const mapStore = useMapStore()
 
 // 时间范围筛选
-const selectedRange = ref<'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>('today')
+const selectedRange = ref<'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>('custom')
 const startDate = ref('')
 const endDate = ref('')
 
+const getBaseDate = () => {
+  if (endDate.value) {
+    const parsed = new Date(endDate.value)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+    }
+  }
+  return new Date()
+}
+
 // 计算时间范围标签
 const timeRangeLabel = computed(() => {
-  const now = new Date()
+  const now = getBaseDate()
   switch (selectedRange.value) {
     case 'today':
       return now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
@@ -645,7 +371,7 @@ const timeRangeDuration = computed(() => {
     case 'week':
       return '7天'
     case 'month':
-      const now = new Date()
+      const now = getBaseDate()
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
       return `${daysInMonth}天`
     case 'quarter':
@@ -667,7 +393,7 @@ const timeRangeDuration = computed(() => {
 // 选择时间范围
 const selectTimeRange = (range: typeof selectedRange.value) => {
   selectedRange.value = range
-  const now = new Date()
+  const now = getBaseDate()
 
   switch (range) {
     case 'today':
@@ -720,53 +446,119 @@ const updateCustomDateRange = () => {
 // 根据时间范围更新数据
 const updateDataByTimeRange = () => {
   console.log('更新数据，时间范围:', selectedRange.value, '开始日期:', startDate.value, '结束日期:', endDate.value)
+  if (startDate.value && endDate.value) {
+    passengerStore.setTimeRange(startDate.value, endDate.value)
+  }
   // 加载对应时间范围的数据
   loadData()
 }
 
-// 地图视图模式
-const mapViewMode = ref<'heatmap' | 'flow' | 'markers'>('markers')
-
-// 热力图数据
-const heatmapData = computed(() => {
-  // 生成模拟热力图数据
-  const stations = ['成都东', '重庆北', '内江北', '资阳北', '永川东']
-  const times = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
-
-  return stations.map((station, rowIndex) => {
-    return times.map((time, colIndex) => {
-      const baseValue = 1000 + Math.random() * 5000
-      const timeFactor = colIndex < 2 ? 0.3 : colIndex < 4 ? 0.7 : 1.0
-      const stationFactor = rowIndex < 2 ? 1.2 : rowIndex < 4 ? 0.8 : 1.0
-      const value = Math.round(baseValue * timeFactor * stationFactor)
-
-      return {
-        value,
-        time,
-        label: `${station}站`
-      }
-    })
-  })
+watch(() => [startDate.value, endDate.value, selectedRange.value], ([newStart, newEnd]) => {
+  if (!newStart || !newEnd) return
+  if (isLoading.value) return
+  loadData()
 })
 
-// 流向图数据
-const flowData = ref([
-  { id: 1, label: '成都→重庆', style: 'left: 30%; top: 40%; width: 30%; transform: rotate(30deg);', intensity: 'high' },
-  { id: 2, label: '重庆→成都', style: 'left: 60%; top: 60%; width: 30%; transform: rotate(210deg);', intensity: 'high' },
-  { id: 3, label: '内江→资阳', style: 'left: 40%; top: 50%; width: 15%; transform: rotate(45deg);', intensity: 'medium' },
-  { id: 4, label: '资阳→内江', style: 'left: 35%; top: 45%; width: 15%; transform: rotate(225deg);', intensity: 'medium' },
-  { id: 5, label: '永川→荣昌', style: 'left: 55%; top: 55%; width: 10%; transform: rotate(60deg);', intensity: 'low' },
-  { id: 6, label: '荣昌→永川', style: 'left: 50%; top: 58%; width: 10%; transform: rotate(240deg);', intensity: 'low' }
-])
+watch(
+  () => [passengerStore.analysisParams.startDate, passengerStore.analysisParams.endDate],
+  ([newStart, newEnd]) => {
+    if (newStart && newStart !== startDate.value) startDate.value = newStart
+    if (newEnd && newEnd !== endDate.value) endDate.value = newEnd
+  }
+)
 
-// 切换地图视图模式
-const changeMapViewMode = (mode: 'heatmap' | 'flow' | 'markers') => {
-  mapViewMode.value = mode
+// 空间分布视图
+const spatialView = ref<'map' | 'trend'>('map')
+
+// 趋势粒度
+const trendGranularity = ref<'hourly' | 'daily' | 'weekly' | 'monthly'>('daily')
+
+// 热力图数据
+
+const handleTrendGranularityChange = (granularity: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
+  if (trendGranularity.value === granularity) return
+  trendGranularity.value = granularity
+  if (!isLoading.value) {
+    loadData()
+  }
 }
 
+const mapHasFlows = computed(() => passengerStore.flowLines.length > 0)
+
+const applyMapMode = () => {
+  mapStore.updateMapConfig({
+    showStationMarkers: false,
+    showFlowLines: true
+  })
+}
+
+const syncMapData = () => {
+  const stations = Array.isArray(passengerStore.spatialDistribution)
+    ? passengerStore.spatialDistribution
+    : []
+  if (!stations.length) {
+    mapStore.setStationMarkers([])
+    return
+  }
+
+  const maxPassengers = Math.max(...stations.map(s => s.totalPassengers || 0), 1)
+  const markers = stations
+    .filter(s => Number.isFinite(s.latitude) && Number.isFinite(s.longitude))
+    .map((station) => ({
+      stationId: station.stationId,
+      stationName: station.stationName,
+      position: [station.longitude, station.latitude] as [number, number],
+      size: calculateMarkerSize(station.totalPassengers || 0, 20, 60, maxPassengers),
+      color: calculateMarkerColor(station.totalPassengers || 0, maxPassengers),
+      passengerCount: station.totalPassengers || 0,
+      data: station
+    }))
+
+  mapStore.setStationMarkers(markers)
+
+  if (markers.length > 0) {
+    mapStore.updateViewState({
+      center: calculateCenter(markers)
+    })
+  }
+
+  const markerMap = new Map(markers.map(marker => [marker.stationId, marker]))
+  const flowLines = Array.isArray(passengerStore.flowLines)
+    ? passengerStore.flowLines
+    : []
+  if (!flowLines.length) {
+    mapStore.clearFlowLines()
+    return
+  }
+  const lines = flowLines.map((flow) => {
+      const from = markerMap.get(flow.fromStationId)
+      const to = markerMap.get(flow.toStationId)
+      if (!from || !to) return null
+        const line = createFlowLine(
+          { id: from.stationId, position: from.position, name: from.stationName },
+          { id: to.stationId, position: to.position, name: to.stationName },
+          flow.passengerCount
+        )
+      const color = flow.intensity === 'high' ? '#f44336' :
+        flow.intensity === 'medium' ? '#ff9800' : '#4caf50'
+      return { ...line, color, dashArray: flow.intensity === 'low' ? '6,6' : 'solid' }
+    })
+    .filter(Boolean) as any[]
+
+  mapStore.setFlowLines(lines)
+}
+
+
 // 初始化时间范围
-onMounted(() => {
-  selectTimeRange('today')
+onMounted(async () => {
+  const synced = await passengerStore.syncDateRangeFromStats()
+  if (synced) {
+    selectedRange.value = 'custom'
+    startDate.value = passengerStore.analysisParams.startDate
+    endDate.value = passengerStore.analysisParams.endDate
+  }
+  applyMapMode()
+  await loadData()
 })
 
 // KPI数据
@@ -790,8 +582,8 @@ const isRefreshing = ref(false)
 // 获取当前时间范围
 const getCurrentTimeRange = (): TimeRange => {
   return {
-    startDate: startDate.value,
-    endDate: endDate.value,
+    startDate: passengerStore.analysisParams.startDate,
+    endDate: passengerStore.analysisParams.endDate,
     rangeType: selectedRange.value
   }
 }
@@ -800,27 +592,55 @@ const getCurrentTimeRange = (): TimeRange => {
 const loadData = async () => {
   try {
     isLoading.value = true
+    if (startDate.value && endDate.value) {
+      passengerStore.setTimeRange(startDate.value, endDate.value)
+      startDate.value = passengerStore.analysisParams.startDate
+      endDate.value = passengerStore.analysisParams.endDate
+    }
     const timeRange = getCurrentTimeRange()
 
-    // 并行加载所有数据 - 使用模拟数据，因为Django后端没有这些API端点
-    const [kpiResponse, stationsResponse, linesResponse, trendResponse, timePeriodResponse] = await Promise.all([
-      mockService.getKpiData(timeRange),
-      mockService.getStations(timeRange),
-      mockService.getLines(timeRange),
-      mockService.getTrendData(timeRange, 'hourly'),
-      mockService.getTimePeriodData(timeRange)
+    // 并行加载所有数据
+    const results = await Promise.allSettled([
+      apiService.getKpiData(timeRange),
+      apiService.getStations({ ...timeRange, page_size: 100 }).then((res: any) => res?.results ?? res ?? []),
+      apiService.getTrendData(timeRange, trendGranularity.value),
+      apiService.getTimePeriodData(timeRange)
     ])
 
-    // 更新数据
-    kpiData.value = kpiResponse
-    stationsData.value = stationsResponse
-    lineLoads.value = linesResponse
-    trendData.value = trendResponse
-    timePeriodsData.value = timePeriodResponse
+    const [kpiResult, stationsResult, trendResult, timePeriodResult] = results
+
+    if (kpiResult.status === 'fulfilled') {
+      kpiData.value = kpiResult.value
+    } else {
+      console.error('KPI加载失败:', kpiResult.reason)
+    }
+
+    if (stationsResult.status === 'fulfilled') {
+      stationsData.value = stationsResult.value
+    } else {
+      console.error('站点加载失败:', stationsResult.reason)
+    }
+
+    if (trendResult.status === 'fulfilled') {
+      trendData.value = trendResult.value
+    } else {
+      console.error('趋势加载失败:', trendResult.reason)
+    }
+
+    if (timePeriodResult.status === 'fulfilled') {
+      timePeriodsData.value = timePeriodResult.value
+    } else {
+      console.error('时段加载失败:', timePeriodResult.reason)
+    }
+
+    await Promise.allSettled([
+      passengerStore.fetchSpatialDistribution(),
+      passengerStore.fetchFlowLines()
+    ])
+    syncMapData()
 
   } catch (error) {
     console.error('加载数据失败:', error)
-    // 保持模拟数据作为回退
   } finally {
     isLoading.value = false
   }
@@ -835,10 +655,7 @@ const refreshData = async () => {
   try {
     const timeRange = getCurrentTimeRange()
 
-    // 调用API刷新数据 - 使用模拟数据
-    // await dataService.refreshData(timeRange)
-    // 模拟刷新延迟
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await apiService.refreshData(timeRange)
 
     // 重新加载数据
     await loadData()
@@ -850,210 +667,15 @@ const refreshData = async () => {
   }
 }
 
-// 初始加载
-onMounted(() => {
-  loadData()
-})
+// 初始加载在上面的 onMounted 里完成
 
-// 模拟数据 - 地图站点
-const mockStations = ref([
-  { id: 1, name: '成都', size: 'large', style: 'left: 30%; top: 40%;' },
-  { id: 2, name: '重庆', size: 'large', style: 'left: 60%; top: 60%;' },
-  { id: 3, name: '内江', size: 'medium', style: 'left: 40%; top: 50%;' },
-  { id: 4, name: '资阳', size: 'small', style: 'left: 35%; top: 45%;' },
-  { id: 5, name: '永川', size: 'small', style: 'left: 55%; top: 55%;' },
-  { id: 6, name: '荣昌', size: 'small', style: 'left: 50%; top: 58%;' }
-])
-
-// 模拟数据 - 趋势图（已移除，使用API数据）
-
-// 模拟数据 - 站点排名
-const topStations = ref([
-  { id: 1, rank: 1, name: '成都东站', code: 'CDW', count: 125678, percentage: 100 },
-  { id: 2, rank: 2, name: '重庆北站', code: 'CUW', count: 98765, percentage: 78 },
-  { id: 3, rank: 3, name: '内江北站', code: 'NKW', count: 65432, percentage: 52 },
-  { id: 4, rank: 4, name: '资阳北站', code: 'ZYW', count: 54321, percentage: 43 },
-  { id: 5, rank: 5, name: '永川东站', code: 'YCW', count: 43210, percentage: 34 }
-])
-
-// 线路负载分析
-const loadMetric = ref<'occupancy' | 'load' | 'efficiency'>('occupancy')
+// 初始加载在上面的 onMounted 里完成
 
 // 数据变量
 const stationsData = ref<Station[]>([])
-const lineLoads = ref<Line[]>([])
 const trendData = ref<TrendData[]>([])
 const timePeriodsData = ref<TimePeriodData[]>([])
 
-// 线路负载数据（回退数据）
-const lineLoadsData = ref<Line[]>([
-  {
-    id: 1,
-    name: '成渝高铁',
-    code: 'CYG',
-    occupancyRate: 92,
-    loadRate: 85,
-    efficiency: 88,
-    industryAverage: 75,
-    trend: 15.2,
-    status: 'high'
-  },
-  {
-    id: 2,
-    name: '渝贵铁路',
-    code: 'YGR',
-    occupancyRate: 78,
-    loadRate: 72,
-    efficiency: 75,
-    industryAverage: 70,
-    trend: 8.7,
-    status: 'medium'
-  },
-  {
-    id: 3,
-    name: '成贵高铁',
-    code: 'CGG',
-    occupancyRate: 65,
-    loadRate: 58,
-    efficiency: 62,
-    industryAverage: 65,
-    trend: 6.3,
-    status: 'medium'
-  },
-  {
-    id: 4,
-    name: '西成高铁',
-    code: 'XCG',
-    occupancyRate: 45,
-    loadRate: 42,
-    efficiency: 44,
-    industryAverage: 60,
-    trend: -2.1,
-    status: 'low'
-  },
-  {
-    id: 5,
-    name: '渝万铁路',
-    code: 'YWR',
-    occupancyRate: 82,
-    loadRate: 76,
-    efficiency: 79,
-    industryAverage: 68,
-    trend: 11.4,
-    status: 'high'
-  }
-])
-
-// 线路工具提示
-const lineTooltip = ref({
-  visible: false,
-  line: {} as Line,
-  x: 0,
-  y: 0
-})
-
-// 获取线路指标
-const getLineMetric = (line: Line) => {
-  switch (loadMetric.value) {
-    case 'occupancy':
-      return line.occupancyRate
-    case 'load':
-      return line.loadRate
-    case 'efficiency':
-      return line.efficiency
-    default:
-      return line.occupancyRate
-  }
-}
-
-// 获取负载状态类
-const getLoadStatusClass = (value: number) => {
-  if (value > 80) return 'load-high'
-  if (value > 60) return 'load-medium'
-  return 'load-low'
-}
-
-// 平均上座率
-const avgOccupancyRate = computed(() => {
-  const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
-  const sum = data.reduce((total, line) => total + line.occupancyRate, 0)
-  return Math.round(sum / data.length)
-})
-
-// 平均满载率
-const avgLoadRate = computed(() => {
-  const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
-  const sum = data.reduce((total, line) => total + line.loadRate, 0)
-  return Math.round(sum / data.length)
-})
-
-// 平均上座率趋势
-const avgOccupancyTrend = computed(() => {
-  return 8.5 // 模拟数据
-})
-
-// 平均满载率趋势
-const avgLoadTrend = computed(() => {
-  return 7.2 // 模拟数据
-})
-
-// 最高负载线路
-const peakLine = computed(() => {
-  const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
-  const line = data.reduce((max, l) =>
-    l.occupancyRate > max.occupancyRate ? l : max, data[0])
-  return {
-    name: line.name,
-    value: line.occupancyRate
-  }
-})
-
-// 优化潜力
-const optimizationPotential = computed(() => {
-  const data = lineLoads.value.length > 0 ? lineLoads.value : lineLoadsData.value
-  const maxOccupancy = Math.max(...data.map(l => l.occupancyRate))
-  const minOccupancy = Math.min(...data.map(l => l.occupancyRate))
-  return Math.round((maxOccupancy - minOccupancy) / 2)
-})
-
-// 线路工具提示样式
-const lineTooltipStyle = computed(() => ({
-  left: `${lineTooltip.value.x}px`,
-  top: `${lineTooltip.value.y}px`
-}))
-
-// 显示线路工具提示
-const showLineTooltip = (line: Line) => {
-  lineTooltip.value = {
-    visible: true,
-    line,
-    x: 100,
-    y: 200
-  }
-}
-
-// 隐藏线路工具提示
-const hideLineTooltip = () => {
-  lineTooltip.value.visible = false
-}
-
-// 切换负载指标
-const changeLoadMetric = (metric: 'occupancy' | 'load' | 'efficiency') => {
-  loadMetric.value = metric
-}
-
-// 模拟数据 - 实时列车
-const recentTrains = ref([
-  { id: 1, code: 'G8501', type: '高铁', departureStation: '成都东', arrivalStation: '重庆北', departureTime: '08:00', arrivalTime: '09:30', occupancy: 92, status: 'running', statusText: '运行中' },
-  { id: 2, code: 'G8503', type: '高铁', departureStation: '重庆北', arrivalStation: '成都东', departureTime: '09:00', arrivalTime: '10:30', occupancy: 85, status: 'running', statusText: '运行中' },
-  { id: 3, code: 'D5101', type: '动车', departureStation: '内江北', arrivalStation: '资阳北', departureTime: '10:30', arrivalTime: '11:15', occupancy: 78, status: 'running', statusText: '运行中' },
-  { id: 4, code: 'G8505', type: '高铁', departureStation: '成都东', arrivalStation: '永川东', departureTime: '11:00', arrivalTime: '12:00', occupancy: 65, status: 'running', statusText: '运行中' },
-  { id: 5, code: 'G8507', type: '高铁', departureStation: '重庆北', arrivalStation: '荣昌北', departureTime: '12:30', arrivalTime: '13:15', occupancy: 88, status: 'scheduled', statusText: '待发车' }
-])
-
-// 分页
-const currentPage = ref(1)
-const totalPages = ref(5)
 </script>
 
 <style scoped>
@@ -1457,7 +1079,13 @@ const totalPages = ref(5)
 
 @media (min-width: 1024px) {
   .map-card {
-    grid-column: 1;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .analysis-card {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1618,6 +1246,36 @@ const totalPages = ref(5)
 /* 流向图样式 */
 .flow-container {
   height: 300px;
+}
+
+.station-map-container {
+  height: 460px;
+  border-radius: var(--border-radius-base);
+  overflow: hidden;
+  background-color: var(--color-bg-secondary);
+  position: relative;
+}
+
+.trend-panel {
+  min-height: 460px;
+}
+
+.gaode-map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.map-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  background: rgba(255, 255, 255, 0.9);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--border-radius-full);
 }
 
 .flow-placeholder {
@@ -1851,279 +1509,6 @@ const totalPages = ref(5)
 .load-status.low {
   background-color: rgba(46, 139, 87, 0.1);
   color: var(--color-success);
-}
-
-/* 线路负载分析样式 */
-.load-analysis {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-4);
-}
-
-.load-chart {
-  background-color: var(--color-bg-secondary);
-  border-radius: var(--border-radius-base);
-  padding: var(--spacing-4);
-}
-
-.load-bars {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-}
-
-.load-bar-item {
-  display: grid;
-  grid-template-columns: 120px 1fr 180px 60px;
-  align-items: center;
-  gap: var(--spacing-4);
-  padding: var(--spacing-3);
-  background-color: var(--color-bg-tertiary);
-  border-radius: var(--border-radius-base);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.load-bar-item:hover {
-  background-color: var(--color-bg-secondary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
-}
-
-.bar-label {
-  display: flex;
-  flex-direction: column;
-}
-
-.line-name {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.line-code {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-}
-
-.bar-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-}
-
-.bar-track {
-  height: 24px;
-  background-color: var(--color-bg-secondary);
-  border-radius: var(--border-radius-full);
-  overflow: hidden;
-  position: relative;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: var(--border-radius-full);
-  transition: width var(--transition-slow);
-  position: relative;
-}
-
-.bar-fill.load-high {
-  background-color: var(--color-error);
-}
-
-.bar-fill.load-medium {
-  background-color: var(--color-warning);
-}
-
-.bar-fill.load-low {
-  background-color: var(--color-success);
-}
-
-.bar-value {
-  position: absolute;
-  right: var(--spacing-2);
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: var(--font-size-xs);
-  color: white;
-  font-weight: var(--font-weight-medium);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.bar-comparison {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  font-size: var(--font-size-xs);
-}
-
-.comparison-label {
-  color: var(--color-text-secondary);
-  min-width: 60px;
-}
-
-.comparison-bar {
-  flex: 1;
-  height: 4px;
-  background-color: var(--color-bg-tertiary);
-  border-radius: var(--border-radius-full);
-  overflow: hidden;
-}
-
-.comparison-fill {
-  height: 100%;
-  background-color: var(--color-text-tertiary);
-  border-radius: var(--border-radius-full);
-}
-
-.comparison-value {
-  color: var(--color-text-tertiary);
-  min-width: 40px;
-  text-align: right;
-}
-
-.bar-stats {
-  display: flex;
-  gap: var(--spacing-3);
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.stat-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.stat-value {
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-}
-
-.bar-trend {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  justify-content: center;
-}
-
-.bar-trend.positive {
-  color: var(--color-success);
-}
-
-.bar-trend.negative {
-  color: var(--color-error);
-}
-
-.bar-trend svg {
-  width: 12px;
-  height: 12px;
-}
-
-.load-summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-3);
-}
-
-.summary-card {
-  background-color: var(--color-bg-secondary);
-  border-radius: var(--border-radius-base);
-  padding: var(--spacing-3);
-  text-align: center;
-}
-
-.summary-value {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-primary);
-  margin-bottom: var(--spacing-1);
-}
-
-.summary-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-2);
-}
-
-.summary-trend {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-1);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-}
-
-.summary-trend.positive {
-  color: var(--color-success);
-}
-
-.summary-trend.negative {
-  color: var(--color-error);
-}
-
-.summary-trend svg {
-  width: 12px;
-  height: 12px;
-}
-
-.summary-detail {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  margin-top: var(--spacing-1);
-}
-
-.line-tooltip {
-  position: fixed;
-  background-color: white;
-  border-radius: var(--border-radius-base);
-  box-shadow: var(--shadow-lg);
-  padding: var(--spacing-3);
-  z-index: 1000;
-  min-width: 200px;
-  pointer-events: none;
-  animation: fadeIn var(--transition-fast);
-}
-
-.tooltip-header {
-  margin-bottom: var(--spacing-2);
-  padding-bottom: var(--spacing-2);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.tooltip-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-}
-
-.tooltip-row {
-  display: flex;
-  justify-content: space-between;
-}
-
-.tooltip-label {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.tooltip-value {
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-sm);
-}
-
-.tooltip-value.positive {
-  color: var(--color-success);
-}
-
-.tooltip-value.negative {
-  color: var(--color-error);
 }
 
 @keyframes fadeIn {

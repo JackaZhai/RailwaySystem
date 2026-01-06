@@ -27,7 +27,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 // 创建axios实例
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -79,7 +79,9 @@ export const passengerService = {
     try {
       // 调用Django客流分析API
       const backendData = await apiClient.post('/analytics/flow/', params);
-      const items = backendData?.data || [];
+      const items = Array.isArray(backendData)
+        ? backendData
+        : (backendData?.data || []);
 
       // 转换数据格式以匹配前端类型
       const flowTrendData: FlowTrendData = {
@@ -112,6 +114,8 @@ export const passengerService = {
       const queryParams = new URLSearchParams();
       if (params.startDate) queryParams.append('start_date', params.startDate);
       if (params.endDate) queryParams.append('end_date', params.endDate);
+      // 添加时间戳防止缓存
+      queryParams.append('_t', Date.now().toString());
 
       const response = await apiClient.get(`/passenger-flows/station_ranking/?${queryParams}`);
       const backendData = response;
@@ -146,7 +150,8 @@ export const passengerService = {
           endDate: params.endDate,
           stationIds: params.stationIds,
           lineIds: params.lineIds,
-          trainIds: params.trainIds
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
         }
       });
 
@@ -175,6 +180,8 @@ export const passengerService = {
       const queryParams = new URLSearchParams();
       if (params.startDate) queryParams.append('start_date', params.startDate);
       if (params.endDate) queryParams.append('end_date', params.endDate);
+      // 添加时间戳防止缓存
+      queryParams.append('_t', Date.now().toString());
 
       const response = await apiClient.get(`/passenger-flows/time_distribution/?${queryParams}`);
       const backendData = response;
@@ -210,7 +217,8 @@ export const passengerService = {
           stationIds: params.stationIds,
           lineIds: params.lineIds,
           trainIds: params.trainIds,
-          granularity
+          granularity,
+          _t: Date.now() // 防止缓存
         }
       });
 
@@ -226,8 +234,30 @@ export const passengerService = {
    */
   async getSpatialDistribution(_params: AnalysisRequest): Promise<SpatialDistribution[]> {
     try {
-      // 后端未提供站点经纬度，返回空数组避免展示模拟数据
-      return [];
+      const response = await apiClient.get('/analytics/map/', {
+        params: {
+          startDate: _params.startDate,
+          endDate: _params.endDate,
+          stationIds: _params.stationIds,
+          lineIds: _params.lineIds,
+          trainIds: _params.trainIds,
+          _t: Date.now()
+        }
+      });
+
+      const stations = response?.stations || [];
+      return stations.map((item: any) => ({
+        stationId: item.stationId ?? item.id,
+        stationName: item.stationName ?? item.name,
+        stationTelecode: item.stationTelecode ?? item.telecode,
+        latitude: item.latitude ?? item.lat,
+        longitude: item.longitude ?? item.lng,
+        totalPassengers: item.totalPassengers ?? 0,
+        passengersIn: item.passengersIn ?? 0,
+        passengersOut: item.passengersOut ?? 0,
+        radius: 0,
+        color: ''
+      }));
     } catch (error) {
       console.error('获取空间分布失败:', error);
       throw error;
@@ -246,7 +276,8 @@ export const passengerService = {
           days,
           stationIds: params.stationIds,
           lineIds: params.lineIds,
-          trainIds: params.trainIds
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
         }
       });
 
@@ -269,27 +300,7 @@ export const passengerService = {
    */
   async getRealTimeFlows(): Promise<RealTimeFlow[]> {
     try {
-      // 模拟实时数据
-      const stations = await this.getStations();
-      const realTimeFlows: RealTimeFlow[] = stations.slice(0, 10).map((station, index) => {
-        const currentPassengers = Math.floor(Math.random() * 1000) + 500;
-        const capacity = 2000;
-        const occupancyRate = currentPassengers / capacity;
-        const trends: ('up' | 'down' | 'stable')[] = ['up', 'down', 'stable'];
-        const trend = trends[Math.floor(Math.random() * 3)];
-
-        return {
-          stationId: station.id,
-          stationName: station.name,
-          currentPassengers,
-          capacity,
-          occupancyRate,
-          lastUpdate: new Date().toISOString(),
-          trend
-        };
-      });
-
-      return realTimeFlows;
+      return [];
     } catch (error) {
       console.error('获取实时客流失败:', error);
       throw error;
@@ -358,7 +369,8 @@ export const passengerService = {
           endDate: params.endDate,
           stationIds: params.stationIds,
           lineIds: params.lineIds,
-          trainIds: params.trainIds
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
         }
       });
 
@@ -397,7 +409,8 @@ export const passengerService = {
           endDate: params.endDate,
           stationIds: params.stationIds,
           lineIds: params.lineIds,
-          trainIds: params.trainIds
+          trainIds: params.trainIds,
+          _t: Date.now() // 防止缓存
         }
       });
 
@@ -497,7 +510,9 @@ export const passengerService = {
    */
   async getDataDateRange(): Promise<{ startDate: string; endDate: string } | null> {
     try {
-      const response = await apiClient.get('/data/stats/');
+      const response = await apiClient.get('/data/stats/', {
+        params: { _t: Date.now() }
+      });
       const range = response?.dateRange;
       if (range?.minDate && range?.maxDate) {
         return {

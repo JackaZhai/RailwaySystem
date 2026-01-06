@@ -28,6 +28,8 @@ const emit = defineEmits<{
   'map-move': [event: any]
   'station-click': [stationId: number]
   'station-hover': [stationId: number | null]
+  'flowline-click': [lineId: string]
+  'flowline-hover': [lineId: string | null]
 }>()
 
 // Store
@@ -37,6 +39,15 @@ const mapStore = useMapStore()
 const mapInstance = ref<any>(null)
 const mapLoading = ref(false)
 const mapError = ref<string | null>(null)
+const markerInstances = ref<any[]>([])
+const flowLineInstances = ref<Array<{ id: string; line: any; data: any }>>([])
+const flowStationInstances = ref<any[]>([])
+const flowLineBlinkTimers = new Map<string, number>()
+const flowInfoWindow = ref<any>(null)
+const activeFlowLineId = ref<string | null>(null)
+const stickyFlowLineId = ref<string | null>(null)
+const focusedFlowLineId = ref<string | null>(null)
+const suppressNextMapClick = ref(false)
 
 // 计算属性
 const mapStyle = computed(() => {
@@ -135,6 +146,19 @@ const bindMapEvents = () => {
 
   // 地图点击事件
   mapInstance.value.on('click', (event: any) => {
+    if (suppressNextMapClick.value) {
+      suppressNextMapClick.value = false
+      return
+    }
+    if (stickyFlowLineId.value) {
+      resetActiveFlowLine(stickyFlowLineId.value)
+      stickyFlowLineId.value = null
+      closeFlowInfoWindow()
+    }
+    if (focusedFlowLineId.value) {
+      focusedFlowLineId.value = null
+      applyFlowLineStyles()
+    }
     emit('map-click', event)
   })
 
@@ -172,10 +196,20 @@ const renderStationMarkers = () => {
   // 清除现有标记
   clearAllMarkers()
 
+  if (!mapStore.mapConfig.showStationMarkers) {
+    renderFlowStationsFromLines()
+    return
+  }
+
   // 添加新标记
   mapStore.visibleMarkers.forEach(markerData => {
-    createStationMarker(markerData)
+    const marker = createStationMarker(markerData)
+    if (marker) {
+      markerInstances.value.push(marker)
+    }
   })
+
+  renderFlowStationsFromLines()
 }
 
 // 创建单个车站标记
@@ -212,7 +246,7 @@ const createStationMarker = (markerData: any) => {
   // 添加到地图
   marker.setMap(mapInstance.value)
 
-  // 保存标记引用（实际应用中可能需要管理标记引用）
+  return marker
 }
 
 // 创建标记内容
@@ -295,15 +329,27 @@ const createMarkerContent = (markerData: any) => {
 
 // 渲染流向线
 const renderFlowLines = () => {
-  if (!mapInstance.value || !mapStore.mapConfig.showFlowLines) return
+  if (!mapInstance.value) return
 
   // 清除现有流向线
   clearAllFlowLines()
+  clearAllFlowStations()
+
+  if (!mapStore.mapConfig.showFlowLines) return
 
   // 添加新流向线
   mapStore.visibleFlowLines.forEach(lineData => {
-    createFlowLine(lineData)
+    const line = createFlowLine(lineData)
+    if (line) {
+      flowLineInstances.value.push({ id: lineData.id, line, data: lineData })
+      if (lineData.blink) {
+        startFlowLineBlink(lineData.id, line)
+      }
+    }
   })
+
+  renderFlowStationsFromLines()
+  applyFlowLineStyles()
 }
 
 // 创建流向线
@@ -317,26 +363,95 @@ const createFlowLine = (lineData: any) => {
       new AMap.LngLat(lineData.fromPosition[0], lineData.fromPosition[1]),
       new AMap.LngLat(lineData.toPosition[0], lineData.toPosition[1]),
     ],
-    strokeColor: lineData.color || '#00aaff',
-    strokeWeight: lineData.width || Math.max(1, Math.min(8, lineData.passengers / 5000)),
-    strokeStyle: lineData.dashArray || 'solid',
-    strokeOpacity: 0.7,
+    ...getFlowLineStyle(lineData, false),
+  })
+
+  line.on('mouseover', (event: any) => {
+    if (focusedFlowLineId.value && focusedFlowLineId.value !== lineData.id) {
+      return
+    }
+    if (!stickyFlowLineId.value) {
+      setActiveFlowLine(lineData.id)
+      openFlowInfoWindow(lineData, event?.lnglat)
+    }
+    emit('flowline-hover', lineData.id)
+  })
+
+  line.on('mouseout', () => {
+    if (focusedFlowLineId.value && focusedFlowLineId.value !== lineData.id) {
+      return
+    }
+    if (!stickyFlowLineId.value) {
+      resetActiveFlowLine(lineData.id)
+      closeFlowInfoWindow()
+    }
+    emit('flowline-hover', null)
+  })
+
+  line.on('click', (event: any) => {
+    suppressNextMapClick.value = true
+    if (stickyFlowLineId.value && stickyFlowLineId.value !== lineData.id) {
+      resetActiveFlowLine(stickyFlowLineId.value)
+    }
+
+    stickyFlowLineId.value = lineData.id
+    focusedFlowLineId.value = lineData.id
+    setActiveFlowLine(lineData.id)
+    openFlowInfoWindow(lineData, event?.lnglat)
+    applyFlowLineStyles()
+    emit('flowline-click', lineData.id)
   })
 
   line.setMap(mapInstance.value)
+
+  return line
+}
+
+const startFlowLineBlink = (lineId: string, line: any) => {
+  if (flowLineBlinkTimers.has(lineId)) return
+  let high = true
+  const timer = window.setInterval(() => {
+    high = !high
+    line.setOptions({ strokeOpacity: high ? 0.95 : 0.25 })
+  }, 900)
+  flowLineBlinkTimers.set(lineId, timer)
 }
 
 // 清除所有标记
 const clearAllMarkers = () => {
-  // 实际应用中需要管理标记引用并清除
   if (mapInstance.value) {
-    mapInstance.value.clearMap()
+    markerInstances.value.forEach(marker => {
+      marker.setMap(null)
+    })
+    markerInstances.value = []
+  }
+}
+
+const clearAllFlowStations = () => {
+  if (mapInstance.value) {
+    flowStationInstances.value.forEach(marker => {
+      marker.setMap(null)
+    })
+    flowStationInstances.value = []
   }
 }
 
 // 清除所有流向线
 const clearAllFlowLines = () => {
-  // 流向线清理逻辑
+  if (mapInstance.value) {
+    flowLineInstances.value.forEach(item => {
+      item.line.setMap(null)
+    })
+    flowLineInstances.value = []
+    activeFlowLineId.value = null
+    stickyFlowLineId.value = null
+    focusedFlowLineId.value = null
+    flowLineBlinkTimers.forEach(timer => {
+      clearInterval(timer)
+    })
+    flowLineBlinkTimers.clear()
+    closeFlowInfoWindow()
+  }
 }
 
 // 调整视图以适应所有标记
@@ -363,6 +478,266 @@ watch(() => mapStore.visibleFlowLines, () => {
   }
 }, { deep: true })
 
+watch(() => mapStore.mapConfig.showStationMarkers, () => {
+  if (mapInstance.value) {
+    renderStationMarkers()
+  }
+})
+
+watch(() => mapStore.mapConfig.showFlowLines, () => {
+  if (mapInstance.value) {
+    renderFlowLines()
+  }
+})
+
+const renderFlowStationsFromLines = () => {
+  if (!mapInstance.value || !window.AMap) return
+
+  clearAllFlowStations()
+
+  if (!mapStore.mapConfig.showFlowLines) return
+
+  const existingStationIds = new Set(mapStore.visibleMarkers.map(marker => marker.stationId))
+  const shouldRenderFlowStations = !mapStore.mapConfig.showStationMarkers
+
+  mapStore.visibleFlowLines.forEach(lineData => {
+    if (shouldRenderFlowStations || !existingStationIds.has(lineData.fromStationId)) {
+      const marker = createFlowStationMarker(
+        lineData.fromPosition,
+        lineData.fromStationName,
+        lineData.fromStationId
+      )
+      if (marker) flowStationInstances.value.push(marker)
+    }
+    if (shouldRenderFlowStations || !existingStationIds.has(lineData.toStationId)) {
+      const marker = createFlowStationMarker(
+        lineData.toPosition,
+        lineData.toStationName,
+        lineData.toStationId
+      )
+      if (marker) flowStationInstances.value.push(marker)
+    }
+  })
+}
+
+const createFlowStationMarker = (
+  position: [number, number],
+  stationName?: string,
+  stationId?: number
+) => {
+  if (!mapInstance.value || !window.AMap) return null
+  const AMap = window.AMap
+  const marker = new AMap.Marker({
+    position: new AMap.LngLat(position[0], position[1]),
+    title: stationName || (stationId ? `站点 ${stationId}` : '站点'),
+    offset: new AMap.Pixel(-6, -6),
+    content: `
+      <div style="
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 2px solid #1e88e5;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      "></div>
+    `,
+  })
+  marker.setMap(mapInstance.value)
+  return marker
+}
+
+const getFlowLineStyle = (lineData: any, isActive: boolean, isDimmed = false) => {
+  const baseWidth = lineData.width || Math.max(1, Math.min(2.5, lineData.passengers / 25000))
+  const lineColor = lineData.color || '#00aaff'
+  const arrowColor = lineData.arrowColor || '#0d47a1'
+  const opacity = isDimmed ? 0.15 : (isActive ? 0.9 : 0.6)
+  return {
+    strokeColor: lineColor,
+    strokeWeight: isActive ? baseWidth + 1.2 : baseWidth,
+    strokeStyle: 'solid',
+    strokeOpacity: opacity,
+    zIndex: isActive ? 120 : 100,
+    lineJoin: 'round',
+    lineCap: 'round',
+    showDir: true,
+    dirColor: arrowColor,
+  }
+}
+
+const setActiveFlowLine = (lineId: string) => {
+  if (activeFlowLineId.value && activeFlowLineId.value !== lineId && !stickyFlowLineId.value) {
+    resetActiveFlowLine(activeFlowLineId.value)
+  }
+
+  const target = flowLineInstances.value.find(item => item.id === lineId)
+  if (!target) return
+  target.line.setOptions(getFlowLineStyle(target.data, true, false))
+  activeFlowLineId.value = lineId
+}
+
+const resetActiveFlowLine = (lineId: string) => {
+  const target = flowLineInstances.value.find(item => item.id === lineId)
+  if (!target) return
+  target.line.setOptions(getFlowLineStyle(target.data, false, false))
+  if (activeFlowLineId.value === lineId) {
+    activeFlowLineId.value = null
+  }
+}
+
+const applyFlowLineStyles = () => {
+  flowLineInstances.value.forEach(item => {
+    const isFocused = focusedFlowLineId.value === item.id
+    const isActive = isFocused || activeFlowLineId.value === item.id || stickyFlowLineId.value === item.id || item.data?.selected
+    const isDimmed = !!focusedFlowLineId.value && !isFocused
+    item.line.setOptions(getFlowLineStyle(item.data, isActive, isDimmed))
+  })
+}
+
+const focusFlowLine = (lineId: string | null) => {
+  if (!lineId) {
+    focusedFlowLineId.value = null
+    stickyFlowLineId.value = null
+    activeFlowLineId.value = null
+    closeFlowInfoWindow()
+    applyFlowLineStyles()
+    return
+  }
+
+  const target = flowLineInstances.value.find(item => item.id === lineId)
+  if (!target) return
+  focusedFlowLineId.value = lineId
+  stickyFlowLineId.value = lineId
+  activeFlowLineId.value = lineId
+  openFlowInfoWindow(target.data)
+  applyFlowLineStyles()
+}
+
+const getFlowLineMidpoint = (lineData: any) => {
+  const midLng = (lineData.fromPosition[0] + lineData.toPosition[0]) / 2
+  const midLat = (lineData.fromPosition[1] + lineData.toPosition[1]) / 2
+  return [midLng, midLat]
+}
+
+const buildFlowInfoContent = (lineData: any) => {
+  const fromName = lineData.fromStationName || `站点 ${lineData.fromStationId}`
+  const toName = lineData.toStationName || `站点 ${lineData.toStationId}`
+  const passengers = lineData.passengers?.toLocaleString?.() ?? lineData.passengers
+  const loadRate = typeof lineData.loadRate === 'number' ? lineData.loadRate : null
+  const capacity = typeof lineData.capacity === 'number' ? lineData.capacity : null
+  const load = typeof lineData.load === 'number' ? lineData.load : null
+  const remaining = capacity !== null && load !== null ? capacity - load : null
+  const ratePercent = loadRate !== null ? Math.round(loadRate * 100) : null
+  const gauge = ratePercent !== null ? buildGaugeHtml(ratePercent, lineData.color || '#00aaff') : ''
+  const bars = capacity !== null && load !== null ? buildSupplyDemandHtml(capacity, load) : ''
+  return `
+    <div style="
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+      padding: 10px 12px;
+      min-width: 200px;
+      font-size: 12px;
+      color: #2c3e50;
+    ">
+      <div style="font-weight: 600; margin-bottom: 6px;">线路流向</div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: #7f8c8d;">起点</span>
+        <span>${fromName}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: #7f8c8d;">终点</span>
+        <span>${toName}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #7f8c8d;">客流</span>
+        <span>${passengers}</span>
+      </div>
+      ${ratePercent !== null ? `
+      <div style="margin-top: 10px; display: grid; gap: 8px;">
+        <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; align-items: center;">
+          ${gauge}
+          ${bars}
+        </div>
+        <div style="display: flex; justify-content: space-between; font-weight: 600;">
+          <span>剩余运力</span>
+          <span style="color: ${remaining !== null && remaining < 0 ? '#d81b60' : '#2e7d32'};">
+            ${remaining !== null ? remaining.toLocaleString() : '--'}
+          </span>
+        </div>
+      </div>
+      ` : ''}
+    </div>
+  `
+}
+
+const buildGaugeHtml = (percent: number, color: string) => {
+  const clamped = Math.max(0, Math.min(150, percent))
+  const radius = 42
+  const circumference = Math.PI * radius
+  const dash = (clamped / 150) * circumference
+  return `
+    <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+      <svg width="110" height="70" viewBox="0 0 110 70">
+        <path d="M10,60 A45,45 0 0,1 100,60" stroke="#e0e0e0" stroke-width="10" fill="none" stroke-linecap="round" />
+        <path d="M10,60 A45,45 0 0,1 100,60"
+          stroke="${color}"
+          stroke-width="10"
+          fill="none"
+          stroke-linecap="round"
+          stroke-dasharray="${dash} ${circumference}"
+        />
+        <text x="55" y="55" text-anchor="middle" font-size="16" fill="#2c3e50" font-weight="600">${clamped}%</text>
+      </svg>
+      <div style="font-size: 11px; color: #7f8c8d;">负载率</div>
+    </div>
+  `
+}
+
+const buildSupplyDemandHtml = (capacity: number, load: number) => {
+  const maxValue = Math.max(capacity, load, 1)
+  const capacityPercent = Math.round((capacity / maxValue) * 100)
+  const loadPercent = Math.round((load / maxValue) * 100)
+  return `
+    <div style="display:flex; flex-direction:column; gap:6px;">
+      <div style="font-size: 11px; color: #7f8c8d; font-weight:600;">供需关系</div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div style="width: 80px; height: 8px; background:#e0e0e0; border-radius: 999px; overflow:hidden;">
+          <div style="width:${capacityPercent}%; height:100%; background:#409eff;"></div>
+        </div>
+        <span style="font-size:11px;">运力 ${capacity.toLocaleString()}</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div style="width: 80px; height: 8px; background:#e0e0e0; border-radius: 999px; overflow:hidden;">
+          <div style="width:${loadPercent}%; height:100%; background:#f56c6c;"></div>
+        </div>
+        <span style="font-size:11px;">客流 ${load.toLocaleString()}</span>
+      </div>
+    </div>
+  `
+}
+
+const openFlowInfoWindow = (lineData: any, lnglat?: any) => {
+  if (!mapInstance.value || !window.AMap) return
+  const AMap = window.AMap
+  if (!flowInfoWindow.value) {
+    flowInfoWindow.value = new AMap.InfoWindow({
+      isCustom: true,
+      autoMove: true,
+      offset: new AMap.Pixel(0, -12),
+    })
+  }
+  const content = buildFlowInfoContent(lineData)
+  flowInfoWindow.value.setContent(content)
+  const position = lnglat || new AMap.LngLat(...getFlowLineMidpoint(lineData))
+  flowInfoWindow.value.open(mapInstance.value, position)
+}
+
+const closeFlowInfoWindow = () => {
+  if (flowInfoWindow.value) {
+    flowInfoWindow.value.close()
+  }
+}
+
 watch(() => mapStore.mapConfig.mapType, (newType) => {
   if (mapInstance.value) {
     mapInstance.value.setMapStyle(`amap://styles/${newType}`)
@@ -384,6 +759,7 @@ onMounted(() => {
 onUnmounted(() => {
   // 清理地图实例
   if (mapInstance.value) {
+    clearAllFlowLines()
     mapInstance.value.destroy()
     mapInstance.value = null
   }
@@ -395,6 +771,7 @@ defineExpose({
   adjustViewToMarkers,
   updateMarkers: renderStationMarkers,
   updateFlowLines: renderFlowLines,
+  focusFlowLine,
 })
 </script>
 

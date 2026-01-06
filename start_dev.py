@@ -65,13 +65,11 @@ def start_backend(backend_dir):
     """启动后端服务器"""
     print("\n🚀 启动后端Django服务器...")
 
-    # 切换到后端目录
-    os.chdir(backend_dir)
-
     # 启动Django服务器
-    # 注意：不使用PIPE，直接输出到控制台，避免缓冲区满导致死锁
+    # 使用 cwd 参数指定工作目录，而不是 os.chdir
     backend_proc = subprocess.Popen(
         [sys.executable, "manage.py", "runserver", "0.0.0.0:8080"],
+        cwd=backend_dir,
         # stdout=subprocess.PIPE,
         # stderr=subprocess.STDOUT,
         # text=True,
@@ -111,14 +109,13 @@ def start_frontend(frontend_dir):
     """启动前端服务器"""
     print("\n🚀 启动前端Vite开发服务器...")
 
-    # 切换到前端目录
-    os.chdir(frontend_dir)
-
     # 检查node_modules
-    if not os.path.exists("node_modules"):
+    node_modules_path = frontend_dir / "node_modules"
+    if not node_modules_path.exists():
         print("📦 未找到node_modules，正在安装依赖...")
         install_proc = subprocess.run(
             ["npm", "install"],
+            cwd=frontend_dir,
             shell=(os.name == 'nt'),
             capture_output=True,
             text=True
@@ -131,6 +128,7 @@ def start_frontend(frontend_dir):
     # 启动Vite开发服务器
     frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
+        cwd=frontend_dir,
         shell=(os.name == 'nt'),
         # stdout=subprocess.PIPE,
         # stderr=subprocess.STDOUT,
@@ -188,8 +186,8 @@ def main():
         sys.exit(1)
 
     # 检查依赖
-    # if not check_dependencies():
-    #     sys.exit(1)
+    if not check_dependencies():
+        sys.exit(1)
 
     backend_proc = None
     frontend_proc = None
