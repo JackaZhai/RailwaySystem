@@ -779,6 +779,32 @@ export const mockService = {
     return data
   },
 
+  getTimePeriodData: async (timeRange: TimeRange): Promise<TimePeriodData[]> => {
+    await new Promise(resolve => setTimeout(resolve, 400))
+
+    const basePassengers = timeRange.rangeType === 'today' ? 32000 : 180000
+    const periods = [
+      { id: 1, name: 'Early morning', time: '05:00-08:00', factor: 0.18 },
+      { id: 2, name: 'Morning peak', time: '08:00-10:30', factor: 0.28 },
+      { id: 3, name: 'Midday', time: '10:30-16:00', factor: 0.22 },
+      { id: 4, name: 'Evening peak', time: '16:00-19:30', factor: 0.24 },
+      { id: 5, name: 'Night', time: '19:30-23:00', factor: 0.08 }
+    ]
+
+    return periods.map((period) => {
+      const passengers = Math.round(basePassengers * period.factor)
+      const trains = Math.max(10, Math.round(passengers / 180))
+      return {
+        id: period.id,
+        name: period.name,
+        time: period.time,
+        passengers,
+        percentage: Math.round(period.factor * 1000) / 10,
+        trains
+      }
+    })
+  },
+
   // 数据管理模拟接口
   uploadData: async (file: File, options?: { validateOnly?: boolean }): Promise<DataUploadResponse> => {
     await new Promise(resolve => setTimeout(resolve, 1500))

@@ -193,40 +193,6 @@
             <div v-else class="empty-state">请选择热力格查看详情。</div>
           </div>
         </div>
-      <div class="panel-card trend-card">
-        <div v-if="monthlyTrendSeries.length > 0" class="trend-chart-wrap">
-          <LineChart
-            chart-id="line-load-trend"
-            :title="'平均负载月度趋势'"
-            :data="[]"
-            :x-axis-data="monthlyXAxis"
-            :series="monthlyTrendSeries"
-            y-axis-name="平均负载"
-            :legend="true"
-            :toolbox="false"
-            :area-style="false"
-            :show-symbol="true"
-            @chart-click="handleMonthlyClick"
-          />
-        </div>
-        <div v-else class="empty-state">暂无趋势数据。</div>
-      </div>
-      <div v-if="dailyTrendSeries.length > 0" class="panel-card trend-card">
-        <div class="trend-chart-wrap">
-          <LineChart
-            chart-id="line-load-daily"
-            :title="`日趋势 ${selectedMonth}`"
-            :data="[]"
-            :x-axis-data="dailyXAxis"
-            :series="dailyTrendSeries"
-            y-axis-name="平均负载"
-            :legend="true"
-            :toolbox="false"
-            :area-style="false"
-            :show-symbol="true"
-          />
-        </div>
-      </div>
     </div>
 
     <div v-if="activeTab === 'section'" class="tab-panel">
@@ -396,6 +362,41 @@
       </table>
       <div v-if="densityRanking.length === 0" class="empty-state">暂无客流密度数据</div>
     </div>
+
+    <div v-if="activeTab === 'line'" class="panel-card trend-card">
+      <div v-if="monthlyTrendSeries.length > 0" class="trend-chart-wrap">
+        <LineChart
+          chart-id="line-load-trend"
+          :title="'平均负载月度趋势'"
+          :data="[]"
+          :x-axis-data="monthlyXAxis"
+          :series="monthlyTrendSeries"
+          y-axis-name="平均负载"
+          :legend="true"
+          :toolbox="false"
+          :area-style="false"
+          :show-symbol="true"
+          @chart-click="handleMonthlyClick"
+        />
+      </div>
+      <div v-else class="empty-state">暂无趋势数据。</div>
+    </div>
+    <div v-if="activeTab === 'line' && dailyTrendSeries.length > 0" class="panel-card trend-card">
+      <div class="trend-chart-wrap">
+        <LineChart
+          chart-id="line-load-daily"
+          :title="`日趋势 ${selectedMonth}`"
+          :data="[]"
+          :x-axis-data="dailyXAxis"
+          :series="dailyTrendSeries"
+          y-axis-name="平均负载"
+          :legend="true"
+          :toolbox="false"
+          :area-style="false"
+          :show-symbol="true"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -424,14 +425,14 @@ const errorMessage = ref('')
 const activeTab = ref<'line' | 'section' | 'trip' | 'hub'>('line')
 
 const filters = reactive<RouteOptFilters>({
-  timeRange: ['2015-01-01', '2015-01-07'],
-  dayType: 'workday',
-  granularity: 'hour',
+  timeRange: ['2015-01-01', '2016-01-09'],
+  dayType: 'all',
+  granularity: 'day',
   lineIds: [],
-  direction: 'up',
+  direction: 'all',
   threshold: {
-    overload: 1.0,
-    idle: 0.35
+    overload: 0.8,
+    idle: 0.65
   }
 })
 
@@ -809,11 +810,11 @@ const loadLines = async () => {
   const result = await dataService.getRouteLines()
   lines.value = result
   if (lines.value.length > 0 && filters.lineIds.length === 0) {
-    filters.lineIds = [lines.value[0].id]
-    const defaultLine = lines.value[0]
-    if (defaultLine.dateRange?.minDate && defaultLine.dateRange?.maxDate) {
-      filters.timeRange = [defaultLine.dateRange.minDate, defaultLine.dateRange.maxDate]
-    }
+    const preferredNames = new Set(['Line 39', 'Line 68', 'Line 89'])
+    const preferredIds = lines.value
+      .filter((line) => preferredNames.has(line.name))
+      .map((line) => line.id)
+    filters.lineIds = preferredIds.length > 0 ? preferredIds : [lines.value[0].id]
   }
 }
 
